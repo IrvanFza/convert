@@ -124,6 +124,9 @@ Promise.all(initPromises).then(() => {
   searchHandler({ target: inputSearch });
   searchHandler({ target: outputSearch });
 
+  document.querySelector("#popup-bg").style.display = "none";
+  document.querySelector("#popup").style.display = "none";
+
 });
 
 window.convertSelection = async function () {

@@ -104,6 +104,26 @@ button.selected {
   pointer-events: none;
 }
 
+#popup-bg {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+#popup {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: 20vw;
+  transform: translate(-50%, -50%);
+  background-color: white;
+  padding: 15px;
+  border-radius: 10px;
+  text-align: center;
+}
+
 @media only screen and (max-width: 800px) {
   .format-container {
     width: 100%;
@@ -111,5 +131,8 @@ button.selected {
   }
   #format-containers {
     flex-flow: column nowrap;
+  }
+  #popup {
+    width: 80vw;
   }
 }
