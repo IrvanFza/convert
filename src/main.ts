@@ -108,20 +108,37 @@ const fileSelectHandler = (event: Event) => {
   // Common MIME type adjustments (to match "mime" library)
   let mimeType = normalizeMimeType(files[0].type);
 
-  // Search input formats by MIME type, or fall back to file extension.
-  const fileExtension = files[0].name.split(".").pop();
-  ui.inputSearch.value = mimeType || fileExtension || "";
-  filterButtonList(ui.inputList, ui.inputSearch.value);
-
-  // If a MIME type was found, click the button associated with it.
-  if (!mimeType) return;
-  for (const button of Array.from(ui.inputList.children)) {
-    if (!(button instanceof HTMLButtonElement)) continue;
-    if (button.getAttribute("mime-type") === mimeType) {
-      button.click();
-      break;
-    }
+  // Find a button matching the input MIME type.
+  const buttonMimeType = Array.from(ui.inputList.children).find(button => {
+    if (!(button instanceof HTMLButtonElement)) return false;
+    return button.getAttribute("mime-type") === mimeType;
+  });
+  // Click button with matching MIME type.
+  if (mimeType && buttonMimeType instanceof HTMLButtonElement) {
+    buttonMimeType.click();
+    ui.inputSearch.value = mimeType;
+    filterButtonList(ui.inputList, ui.inputSearch.value);
+    return;
   }
+
+  // Fall back to matching format by file extension if MIME type wasn't found.
+  const fileExtension = files[0].name.split(".").pop()?.toLowerCase();
+
+  const buttonExtension = Array.from(ui.inputList.children).find(button => {
+    if (!(button instanceof HTMLButtonElement)) return false;
+    const formatIndex = button.getAttribute("format-index");
+    if (!formatIndex) return;
+    const format = allOptions[parseInt(formatIndex)];
+    return format.format.extension.toLowerCase() === fileExtension;
+  });
+  if (buttonExtension instanceof HTMLButtonElement) {
+    buttonExtension.click();
+    ui.inputSearch.value = buttonExtension.getAttribute("mime-type") || "";
+  } else {
+    ui.inputSearch.value = fileExtension || "";
+  }
+
+  filterButtonList(ui.inputList, ui.inputSearch.value);
 
 };
 
