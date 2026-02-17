@@ -10,15 +10,7 @@ class canvasToBlobHandler implements FormatHandler {
     CommonFormats.PNG.supported("png", true, true),
     CommonFormats.JPEG.supported("jpeg", true, true),
     CommonFormats.WEBP.supported("webp", true, true),
-    {
-      name: "CompuServe Graphics Interchange Format (GIF)",
-      format: "gif",
-      extension: "gif",
-      mime: "image/gif",
-      from: true,
-      to: false,
-      internal: "gif"
-    },
+    CommonFormats.GIF.supported("gif", true, false),
     {
       name: "Scalable Vector Graphics",
       format: "svg",
