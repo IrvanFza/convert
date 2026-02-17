@@ -37,7 +37,7 @@ class pyTurtleHandler implements FormatHandler {
         name: "Python Turtle program",
         format: "py",
         extension: "py",
-        mime: "text/plain",
+        mime: "text/x-python",
         from: false,
         to: true,
         internal: "pyTurtle"
