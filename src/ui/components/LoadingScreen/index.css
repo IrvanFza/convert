@@ -21,6 +21,7 @@
   gap: 1.25rem;
   padding: 2rem;
   flex: 1;
+  min-width: 0;
   min-height: 300px;
   --stripe-width: 10px;
   --stripe-size: 28.284px; /* stripe-width * 2 * sqrt(2) */

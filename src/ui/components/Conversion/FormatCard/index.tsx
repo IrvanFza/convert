@@ -21,7 +21,11 @@ export default function FormatCard({
   const [format, handler] = conversionOption;
 
   return (
-    <button className={`format-card ${selected ? "active" : ""}`} onClick={() => onSelect(id)}>
+    <button
+      className={`format-card ${selected ? "active" : ""}`}
+      onClick={() => onSelect(id)}
+      title={format.name}
+    >
       <div className="format-card-row">
         <FileIcon
           extension={format.extension}

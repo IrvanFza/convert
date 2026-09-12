@@ -6,6 +6,7 @@
   padding: 0.65rem 0.75rem;
   display: flex;
   flex-direction: column;
+  min-width: 0;
   gap: 0.35rem;
   text-align: left;
   font: inherit;
@@ -31,11 +32,13 @@
 
   .format-card-text {
     display: flex;
+    flex: 1;
     flex-direction: column;
     min-width: 0;
   }
 
   .format-card-check {
+    flex-shrink: 0;
     margin-inline-start: auto;
     display: flex;
     align-items: center;
@@ -78,7 +81,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 180px;
   }
 
   .format-card-meta {
