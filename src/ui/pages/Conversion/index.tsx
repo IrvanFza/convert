@@ -1,6 +1,6 @@
 import "./index.css";
 
-import { useState, useMemo, useCallback, useEffect } from "preact/hooks";
+import { useState, useMemo, useCallback, useEffect, useRef } from "preact/hooks";
 import mime from "mime";
 import {
   ConversionOptions,
@@ -16,7 +16,7 @@ import ConversionHeader from "src/ui/components/Conversion/ConversionHeader";
 import FormatExplorer from "src/ui/components/Conversion/FormatExplorer";
 import LoadingScreen from "src/ui/components/LoadingScreen";
 import Footer from "src/ui/components/Footer";
-import { ArrowLeft, ArrowRight } from "lucide-preact";
+import { ArrowLeft, ArrowRight, Plus } from "lucide-preact";
 import { PopupData } from "src/ui";
 import { openPopup } from "src/ui/PopupStore";
 import FileInfoBadge from "src/ui/components/FileInfo";
@@ -131,6 +131,28 @@ function removeFile(key: string) {
   const { [key as keyof typeof SelectedFiles.value]: _, ...rest } = SelectedFiles.value;
   SelectedFiles.value = rest;
   if (Object.keys(rest).length === 0) CurrentPage.value = Pages.Upload;
+}
+
+function addFiles(fileList: FileList | null | undefined) {
+  if (!fileList || fileList.length === 0) return;
+
+  const files = [...Object.values(SelectedFiles.value), ...Array.from(fileList)];
+
+  const sameMime = files.every((file) => file.type === files[0].type);
+  if (!sameMime) {
+    PopupData.value = {
+      title: "Invalid selection",
+      text: "All input files must be of the same type.",
+      dismissible: true,
+      buttonText: "OK",
+    };
+    openPopup();
+    return;
+  }
+
+  SelectedFiles.value = Object.fromEntries(
+    files.map((file) => [`${file.name}-${file.lastModified}`, file]),
+  );
 }
 
 export default function Conversion() {
@@ -306,6 +328,17 @@ export default function Conversion() {
     }
   };
 
+  const addFileRef = useRef<HTMLInputElement>(null);
+
+  const handleAddClick = (ev: MouseEvent) => {
+    ev.preventDefault();
+    addFileRef.current?.click();
+  };
+
+  const handleAddChange = () => {
+    addFiles(addFileRef.current?.files);
+  };
+
   const canProceed = step === "select-from" ? !!fromOption : !!fromOption && !!toOption;
 
   return (
@@ -348,6 +381,23 @@ export default function Conversion() {
                 onRemove={() => removeFile(key)}
               />
             ))}
+            <div
+              className="file-info-badge file-info-add"
+              onClick={handleAddClick}
+              role="button"
+              tabIndex={0}
+              aria-label="Add more files"
+            >
+              <input
+                ref={addFileRef}
+                type="file"
+                multiple
+                hidden
+                onClick={(ev) => ev.stopPropagation()}
+                onChange={handleAddChange}
+              />
+              <Plus size={16} />
+            </div>
           </div>
           {step === "select-to" && (
             <StyledButton onClick={handleBack}>

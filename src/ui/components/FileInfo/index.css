@@ -17,6 +17,16 @@
     border-color: var(--border-secondary);
   }
 
+  &.file-info-add {
+    color: var(--text-primary);
+    border: 1px dashed var(--border-secondary);
+    background: transparent;
+    aspect-ratio: 1;
+    padding: 0;
+    justify-content: center;
+    cursor: pointer;
+  }
+
   .file-info-text {
     display: flex;
     flex-direction: column;
