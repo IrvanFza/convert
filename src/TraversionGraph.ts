@@ -306,16 +306,22 @@ export class TraversionGraph {
       const fromCategories = Array.isArray(fromCategory) ? fromCategory : [fromCategory];
       const toCategories = Array.isArray(toCategory) ? toCategory : [toCategory];
       if (strictCategories) {
-        cost += this.categoryChangeCosts.reduce((totalCost, c) => {
-          // If the category change defined in CATEGORY_CHANGE_COSTS matches the categories of the formats, add the specified cost. Otherwise, if the categories are the same, add no cost. If the categories differ but no specific cost is defined for that change, add a default cost.
-          if (
-            fromCategories.includes(c.from) &&
-            toCategories.includes(c.to) &&
-            (!c.handler || c.handler === handler.toLowerCase())
-          )
-            return totalCost + c.cost;
-          return totalCost + DEFAULT_CATEGORY_CHANGE_COST;
-        }, 0);
+        // If the category change defined in CATEGORY_CHANGE_COSTS matches the categories of the formats, add the specified cost. Otherwise, if the categories are the same, add no cost. If the categories differ but no specific cost is defined for that change, add a default cost.
+        for (const fromCat of fromCategories) {
+          for (const toCat of toCategories) {
+            if (fromCat === toCat) continue;
+            const costs = this.categoryChangeCosts.filter(
+              (c) =>
+                c.from === fromCat &&
+                c.to === toCat &&
+                (!c.handler || c.handler === handler.toLowerCase()),
+            );
+            cost +=
+              costs.length !== 0
+                ? costs.reduce((totalCost, c) => totalCost + c.cost, 0)
+                : DEFAULT_CATEGORY_CHANGE_COST;
+          }
+        }
       } else if (!fromCategories.some((c) => toCategories.includes(c))) {
         let costs = this.categoryChangeCosts.filter(
           (c) =>
