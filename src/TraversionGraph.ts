@@ -5,6 +5,7 @@ interface QueueNode {
   index: number;
   cost: number;
   path: ConvertPathNode[];
+  visitedBorder: number;
 }
 interface CategoryChangeCost {
   from: string;
@@ -422,12 +423,13 @@ export class TraversionGraph {
       1000,
       (a: QueueNode, b: QueueNode) => a.cost - b.cost,
     );
+    const visited = new Map<number, number>(); // node index → insertion order
     const fromIdentifier = from.format.mime + `(${from.format.format})`;
     const toIdentifier = to.format.mime + `(${to.format.format})`;
     const fromIndex = this.nodeIndexByIdentifier.get(fromIdentifier) ?? -1;
     const toIndex = this.nodeIndexByIdentifier.get(toIdentifier) ?? -1;
     if (fromIndex === -1 || toIndex === -1) return []; // If either format is not in the graph, return empty array
-    queue.add({ index: fromIndex, cost: 0, path: [from] });
+    queue.add({ index: fromIndex, cost: 0, path: [from], visitedBorder: visited.size });
     console.log(
       `Starting path search from ${from.format.mime}(${from.handler?.name}) to ${to.format.mime}(${to.handler?.name}) (simple mode: ${simpleMode})`,
     );
@@ -437,6 +439,11 @@ export class TraversionGraph {
       iterations++;
       // Get the node with the lowest cost
       let current = queue.poll()!;
+      const indexInVisited = visited.get(current.index) ?? -1;
+      if (indexInVisited >= 0 && indexInVisited < current.visitedBorder) {
+        this.dispatchEvent("skipped", current.path);
+        continue;
+      }
       if (current.index === toIndex) {
         // Return the path of handlers and formats to get from the input format to the output format
         const logString = `${iterations} with cost ${current.cost.toFixed(3)}: ${current.path.map((p) => p.handler.name + "(" + p.format.mime + ")").join(" → ")}`;
@@ -452,17 +459,12 @@ export class TraversionGraph {
         }
         continue;
       }
+      if (!visited.has(current.index)) visited.set(current.index, visited.size);
       this.dispatchEvent("searching", current.path);
       this.nodes[current.index].edges.forEach((edgeIndex) => {
         let edge = this.edges[edgeIndex];
-        if (
-          current.path.some(
-            (node) =>
-              node.format.mime === edge.to.format.mime &&
-              node.format.format === edge.to.format.format,
-          )
-        )
-          return;
+        const targetIndexInVisited = visited.get(edge.to.index) ?? -1;
+        if (targetIndexInVisited >= 0 && targetIndexInVisited < current.visitedBorder) return;
         const handler = this.handlerByName.get(edge.handler);
         if (!handler) return; // If the handler for this edge is not found, skip it
 
@@ -471,6 +473,7 @@ export class TraversionGraph {
           index: edge.to.index,
           cost: current.cost + edge.cost + this.calculateAdaptiveCost(path),
           path: path,
+          visitedBorder: visited.size,
         });
       });
       if (iterations % LOG_FREQUENCY === 0) {
