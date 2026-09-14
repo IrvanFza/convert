@@ -496,12 +496,15 @@ export class TraversionGraph {
       if (isDeadEnd) return Infinity;
     }
     let cost = 0;
-    const categoriesInPath = path.map((p) => p.format.category || p.format.mime.split("/")[0]);
+    const categoriesInPath = path.map((p) => {
+      const category = p.format.category || p.format.mime.split("/")[0];
+      return Array.isArray(category) ? category : [category];
+    });
     this.categoryAdaptiveCosts.forEach((c) => {
       let pathPtr = categoriesInPath.length - 1,
         categoryPtr = c.categories.length - 1;
       while (true) {
-        if (categoriesInPath[pathPtr] === c.categories[categoryPtr]) {
+        if (categoriesInPath[pathPtr]?.includes(c.categories[categoryPtr])) {
           categoryPtr--;
           pathPtr--;
 
@@ -512,7 +515,7 @@ export class TraversionGraph {
           if (pathPtr < 0) break;
         } else if (
           categoryPtr + 1 < c.categories.length &&
-          categoriesInPath[pathPtr] === c.categories[categoryPtr + 1]
+          categoriesInPath[pathPtr]?.includes(c.categories[categoryPtr + 1])
         ) {
           pathPtr--;
           if (pathPtr < 0) break;
