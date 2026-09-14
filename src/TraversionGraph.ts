@@ -74,7 +74,7 @@ export class TraversionGraph {
   private nodeIndexByIdentifier = new Map<string, number>();
   private handlerByName = new Map<string, FormatHandler>();
   private formatPriorityByHandler = new Map<string, Map<string, number>>();
-  private handlerPairs = new Map<string, string>();
+  private handlerPairs = new Map<string, Set<string>>();
 
   public addCategoryChangeCost(
     from: string,
@@ -188,11 +188,13 @@ export class TraversionGraph {
         return [h.name, priorities];
       }),
     );
-    this.handlerPairs = new Map<string, string>(
-      this.categoryChangeCosts
-        .filter((c) => c.handler)
-        .map((c) => [`${c.from}->${c.to}`, c.handler!] as [string, string]),
-    );
+    this.handlerPairs.clear();
+    for (const c of this.categoryChangeCosts) {
+      if (!c.handler) continue;
+      const pair = `${c.from}->${c.to}`;
+      if (!this.handlerPairs.has(pair)) this.handlerPairs.set(pair, new Set());
+      this.handlerPairs.get(pair)!.add(c.handler);
+    }
 
     console.log("Initializing traversion graph...");
     const startTime = performance.now();
@@ -328,7 +330,7 @@ export class TraversionGraph {
             fromCategories.includes(c.from) &&
             toCategories.includes(c.to) &&
             ((!c.handler &&
-              this.handlerPairs.get(`${c.from}->${c.to}`) !== handler.toLowerCase()) ||
+              !this.handlerPairs.get(`${c.from}->${c.to}`)?.has(handler.toLowerCase())) ||
               c.handler === handler.toLowerCase()),
         );
         if (costs.length === 0) cost += DEFAULT_CATEGORY_CHANGE_COST; // If no specific cost is defined for this category change, use the default cost
