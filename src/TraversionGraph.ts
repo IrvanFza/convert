@@ -5,7 +5,6 @@ interface QueueNode {
   index: number;
   cost: number;
   path: ConvertPathNode[];
-  visitedBorder: number;
 }
 interface CategoryChangeCost {
   from: string;
@@ -412,24 +411,48 @@ export class TraversionGraph {
     this.listeners.forEach((l) => l(state, path));
   }
 
+  private calculateRemainingCosts(toIndex: number): number[] {
+    const incomingEdges: Edge[][] = this.nodes.map(() => []);
+    for (const edge of this.edges) incomingEdges[edge.to.index].push(edge);
+
+    const costs = this.nodes.map(() => Infinity);
+    costs[toIndex] = 0;
+    const queue = new PriorityQueue<{ index: number; cost: number }>(
+      1000,
+      (a, b) => a.cost - b.cost,
+    );
+    queue.add({ index: toIndex, cost: 0 });
+    while (queue.size() > 0) {
+      const current = queue.poll()!;
+      if (current.cost > costs[current.index]) continue;
+      for (const edge of incomingEdges[current.index]) {
+        const cost = current.cost + edge.cost;
+        if (cost >= costs[edge.from.index]) continue;
+        costs[edge.from.index] = cost;
+        queue.add({ index: edge.from.index, cost });
+      }
+    }
+    return costs;
+  }
+
   public async *searchPath(
     from: ConvertPathNode,
     to: ConvertPathNode,
     simpleMode: boolean,
   ): AsyncGenerator<ConvertPathNode[]> {
-    // Dijkstra's algorithm
-    // Priority queue of {index, cost, path}
-    let queue: PriorityQueue<QueueNode> = new PriorityQueue<QueueNode>(
-      1000,
-      (a: QueueNode, b: QueueNode) => a.cost - b.cost,
-    );
-    const visited = new Map<number, number>(); // node index → insertion order
+    // A*: base edge costs estimate the remaining costs
     const fromIdentifier = from.format.mime + `(${from.format.format})`;
     const toIdentifier = to.format.mime + `(${to.format.format})`;
     const fromIndex = this.nodeIndexByIdentifier.get(fromIdentifier) ?? -1;
     const toIndex = this.nodeIndexByIdentifier.get(toIdentifier) ?? -1;
     if (fromIndex === -1 || toIndex === -1) return []; // If either format is not in the graph, return empty array
-    queue.add({ index: fromIndex, cost: 0, path: [from], visitedBorder: visited.size });
+    const remainingCosts = this.calculateRemainingCosts(toIndex);
+    if (!Number.isFinite(remainingCosts[fromIndex])) return;
+    const queue = new PriorityQueue<QueueNode>(
+      1000,
+      (a, b) => a.cost + remainingCosts[a.index] - (b.cost + remainingCosts[b.index]),
+    );
+    queue.add({ index: fromIndex, cost: 0, path: [from] });
     console.log(
       `Starting path search from ${from.format.mime}(${from.handler?.name}) to ${to.format.mime}(${to.handler?.name}) (simple mode: ${simpleMode})`,
     );
@@ -439,11 +462,8 @@ export class TraversionGraph {
       iterations++;
       // Get the node with the lowest cost
       let current = queue.poll()!;
-      const indexInVisited = visited.get(current.index) ?? -1;
-      if (indexInVisited >= 0 && indexInVisited < current.visitedBorder) {
-        this.dispatchEvent("skipped", current.path);
-        continue;
-      }
+      // A failed conversion can invalidate paths already in the queue.
+      if (!Number.isFinite(this.calculateAdaptiveCost(current.path))) continue;
       if (current.index === toIndex) {
         // Return the path of handlers and formats to get from the input format to the output format
         const logString = `${iterations} with cost ${current.cost.toFixed(3)}: ${current.path.map((p) => p.handler.name + "(" + p.format.mime + ")").join(" → ")}`;
@@ -459,12 +479,18 @@ export class TraversionGraph {
         }
         continue;
       }
-      if (!visited.has(current.index)) visited.set(current.index, visited.size);
       this.dispatchEvent("searching", current.path);
       this.nodes[current.index].edges.forEach((edgeIndex) => {
         let edge = this.edges[edgeIndex];
-        const targetIndexInVisited = visited.get(edge.to.index) ?? -1;
-        if (targetIndexInVisited >= 0 && targetIndexInVisited < current.visitedBorder) return;
+        if (!Number.isFinite(remainingCosts[edge.to.index])) return;
+        if (
+          current.path.some(
+            (node) =>
+              node.format.mime === edge.to.format.mime &&
+              node.format.format === edge.to.format.format,
+          )
+        )
+          return;
         const handler = this.handlerByName.get(edge.handler);
         if (!handler) return; // If the handler for this edge is not found, skip it
 
@@ -473,7 +499,6 @@ export class TraversionGraph {
           index: edge.to.index,
           cost: current.cost + edge.cost + this.calculateAdaptiveCost(path),
           path: path,
-          visitedBorder: visited.size,
         });
       });
       if (iterations % LOG_FREQUENCY === 0) {
