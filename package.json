@@ -55,6 +55,7 @@
     "bson": "^7.2.0",
     "celaria-formats": "^1.0.2",
     "chess.js": "^1.4.0",
+    "comlink": "^4.4.2",
     "confbox": "^0.2.4",
     "dom-to-svg": "^0.12.2",
     "epubjs": "^0.3.93",

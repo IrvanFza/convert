@@ -1,6 +1,16 @@
-import type { FileFormat, FileData, FormatHandler, ConvertPathNode } from "./FormatHandler.js";
+import {
+  type FileFormat,
+  type FileData,
+  type FormatHandler,
+  type ConvertPathNode,
+  stripFormat,
+  stripHandler,
+  stripPathNode,
+} from "./FormatHandler.js";
 import handlers from "./handlers/index.js";
-import { TraversionGraph } from "./TraversionGraph.js";
+import * as comlink from "comlink";
+import type { TraversionGraph } from "./TraversionGraph.js";
+import TraversionGraphWorker from "./TraversionGraph.js?worker";
 import { CurrentPage, LoadingToolsText, Pages } from "./ui/AppState.js";
 import { signal } from "@preact/signals";
 import { Mode, ModeEnum } from "./ui/ModeStore.js";
@@ -25,7 +35,7 @@ export const ConversionsFromAnyInput: ConvertPathNode[] = handlers
   .flatMap((h) => h.supportedFormats!.filter((f) => f.to).map((f) => ({ handler: h, format: f })));
 
 window.supportedFormatCache = new Map();
-window.traversionGraph = new TraversionGraph();
+window.traversionGraph = comlink.wrap<TraversionGraph>(new TraversionGraphWorker());
 
 window.printSupportedFormatCache = () => {
   const entries = [];
@@ -66,7 +76,15 @@ async function buildOptionList() {
     }
   }
 
-  window.traversionGraph.init(window.supportedFormatCache, handlers);
+  await window.traversionGraph.init(
+    new Map(
+      [...window.supportedFormatCache].map(([key, value]) => [
+        key,
+        value.map((format) => stripFormat(format)),
+      ]),
+    ),
+    handlers.map((handler) => stripHandler(handler)),
+  );
   LoadingToolsText.value = undefined;
 }
 
@@ -98,7 +116,9 @@ async function attemptConvertPath(files: FileData[], path: ConvertPathNode[], ab
   for (let i = 0; i < path.length - 1; i++) {
     if (abort?.aborted) return null;
 
-    const handler = path[i + 1].handler;
+    const handlerDef = path[i + 1].handler;
+    const handler = handlers.find((handler) => handler.name == handlerDef.name);
+    if (!handler) throw `Handler "${handlerDef.name}" not ready after init.`;
     const ctx = ProgressStore.createContext(handler.name, abort);
 
     try {
@@ -149,7 +169,7 @@ async function attemptConvertPath(files: FileData[], path: ConvertPathNode[], ab
 
       const deadEndPath = path.slice(0, i + 2);
       deadEndAttempts.push(deadEndPath);
-      window.traversionGraph.addDeadEndPath(path.slice(0, i + 2));
+      await window.traversionGraph.addDeadEndPath(path.slice(0, i + 2));
 
       ctx.log(`Dead end: ${path[i].format.format} → ${path[i + 1].format.format}`);
       ProgressStore.progress("Looking for a valid path...", 0);
@@ -169,12 +189,15 @@ window.tryConvertByTraversing = async function (
   abort?: AbortSignal,
 ) {
   deadEndAttempts = [];
-  window.traversionGraph.clearDeadEndPaths();
-  for await (const path of window.traversionGraph.searchPath(
-    from,
-    to,
+  await window.traversionGraph.clearDeadEndPaths();
+  const paths = await window.traversionGraph.searchPathProxied(
+    stripPathNode(from),
+    stripPathNode(to),
     Mode.value === ModeEnum.Simple,
-  )) {
+  );
+  while (true) {
+    const { value: path, done } = await paths.next();
+    if (done) return null;
     if (abort?.aborted) return null;
     if (path.at(-1)?.handler === to.handler) {
       path[path.length - 1] = to;
@@ -182,7 +205,6 @@ window.tryConvertByTraversing = async function (
     const attempt = await attemptConvertPath(files, path, abort);
     if (attempt) return attempt;
   }
-  return null;
 };
 
 async function initSupportedFormats() {

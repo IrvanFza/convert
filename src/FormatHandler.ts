@@ -155,11 +155,7 @@ export interface FileData {
   readonly bytes: Uint8Array;
 }
 
-/**
- * Establishes a common interface for converting between file formats.
- * Often a "wrapper" for existing tools.
- */
-export interface FormatHandler {
+export interface HandlerDefinition {
   /** Name of the tool being wrapped (e.g. "FFmpeg"). */
   name: string;
   /** List of supported input/output {@link FileFormat}s. */
@@ -169,7 +165,13 @@ export interface FormatHandler {
    * Conversion using this handler will be performed only if no other direct conversion is found.
    */
   supportAnyInput?: boolean;
+}
 
+/**
+ * Establishes a common interface for converting between file formats.
+ * Often a "wrapper" for existing tools.
+ */
+export interface FormatHandler extends HandlerDefinition {
   /**
    * Whether the handler is ready for use. Should be set in {@link init}.
    * If true, {@link doConvert} is expected to work.
@@ -200,10 +202,40 @@ export interface FormatHandler {
 }
 
 export class ConvertPathNode {
-  public handler: FormatHandler;
+  public handler: HandlerDefinition;
   public format: FileFormat;
-  constructor(handler: FormatHandler, format: FileFormat) {
+  constructor(handler: HandlerDefinition, format: FileFormat) {
     this.handler = handler;
     this.format = format;
   }
+}
+
+// i hate these
+export function stripFormat(format: FileFormat): FileFormat {
+  return {
+    name: format.name,
+    format: format.format,
+    extension: format.extension,
+    mime: format.mime,
+    category: format.category,
+    from: format.from,
+    to: format.to,
+    internal: format.internal,
+    lossless: format.lossless,
+  };
+}
+
+export function stripHandler(handler: HandlerDefinition): HandlerDefinition {
+  return {
+    name: handler.name,
+    supportAnyInput: handler.supportAnyInput,
+    supportedFormats: handler.supportedFormats?.map(stripFormat),
+  };
+}
+
+export function stripPathNode(node: ConvertPathNode): ConvertPathNode {
+  return {
+    handler: stripHandler(node.handler),
+    format: stripFormat(node.format),
+  };
 }

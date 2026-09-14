@@ -1,5 +1,6 @@
-import { ConvertPathNode, type FileFormat, type FormatHandler } from "./FormatHandler.ts";
+import { ConvertPathNode, type FileFormat, type HandlerDefinition } from "./FormatHandler.ts";
 import { PriorityQueue } from "./PriorityQueue.ts";
+import * as comlink from "comlink";
 
 interface QueueNode {
   index: number;
@@ -42,7 +43,7 @@ export interface Edge {
 }
 
 export class TraversionGraph {
-  private handlers: FormatHandler[] = [];
+  private handlers: HandlerDefinition[] = [];
   private nodes: Node[] = [];
   private edges: Edge[] = [];
   private categoryChangeCosts: CategoryChangeCost[] = [
@@ -71,7 +72,7 @@ export class TraversionGraph {
 
   // lookup caches rebuilt on every init() call
   private nodeIndexByIdentifier = new Map<string, number>();
-  private handlerByName = new Map<string, FormatHandler>();
+  private handlerByName = new Map<string, HandlerDefinition>();
   private formatPriorityByHandler = new Map<string, Map<string, number>>();
   private handlerPairs = new Map<string, Set<string>>();
 
@@ -168,7 +169,7 @@ export class TraversionGraph {
    */
   public init(
     supportedFormatCache: Map<string, FileFormat[]>,
-    handlers: FormatHandler[],
+    handlers: HandlerDefinition[],
     strictCategories: boolean = false,
   ) {
     this.handlers = handlers;
@@ -512,6 +513,10 @@ export class TraversionGraph {
     );
   }
 
+  public searchPathProxied(from: ConvertPathNode, to: ConvertPathNode, simpleMode: boolean) {
+    return comlink.proxy(this.searchPath(from, to, simpleMode));
+  }
+
   private calculateAdaptiveCost(path: ConvertPathNode[]): number {
     for (const deadEnd of this.temporaryDeadEnds) {
       let isDeadEnd = true;
@@ -552,3 +557,5 @@ export class TraversionGraph {
     return cost;
   }
 }
+
+comlink.expose(new TraversionGraph());
