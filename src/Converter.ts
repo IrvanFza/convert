@@ -6,7 +6,7 @@ import type {
   FormatHandler,
   HandlerDefinition,
 } from "./FormatHandler";
-import { type ConvertContext } from "./ui/ProgressStore";
+import { createRemoteContext, type ConvertContext, type IProgressStore } from "./ui/ProgressStore";
 
 if (!("window" in globalThis)) {
   (globalThis as unknown as { window: typeof globalThis }).window = globalThis;
@@ -33,52 +33,67 @@ export class Converter {
     path: [ConvertPathNode, ConvertPathNode],
     inputFiles: FileData[],
     { currentStep, totalSteps }: { currentStep: number; totalSteps: number },
-    ctx: ConvertContext,
+    progressStore: IProgressStore,
+    abortPort: MessagePort,
   ): Promise<{ inputFiles: FileData[]; outputFiles: FileData[] }> {
-    if (!this.supportedFormatCache || !this.handlers) throw new Error("Converter not ready.");
-    const handler = this.handlers.find((handler) => handler.name === handlerDef.name);
-    if (!handler) throw new Error(`Handler "${handlerDef.name}" not found.`);
+    const controller = new AbortController();
+    abortPort.addEventListener("message", ({ data }) => {
+      if (data === "abort") controller.abort();
+    });
+    abortPort.start();
 
-    const supportedFormats = this.supportedFormatCache.get(handler.name);
+    const ctx = createRemoteContext(progressStore, handlerDef.name, controller.signal);
 
-    if (!supportedFormats)
-      throw new Error(`Handler "${handler.name}" doesn't support any formats.`);
+    try {
+      if (!this.supportedFormatCache || !this.handlers) throw new Error("Converter not ready.");
+      const handler = this.handlers.find((handler) => handler.name === handlerDef.name);
+      if (!handler) throw new Error(`Handler "${handlerDef.name}" not found.`);
 
-    const inputFormat =
-      supportedFormats.find(
-        (c) => c.from && c.mime === path[0].format.mime && c.format === path[0].format.format,
-      ) || (handler.supportAnyInput ? path[0].format : undefined);
+      const supportedFormats = this.supportedFormatCache.get(handler.name);
 
-    if (!inputFormat)
-      throw new Error(
-        `Handler "${handler.name}" doesn't support the "${path[0].format.format}" format.`,
+      if (!supportedFormats)
+        throw new Error(`Handler "${handler.name}" doesn't support any formats.`);
+
+      const inputFormat =
+        supportedFormats.find(
+          (c) => c.from && c.mime === path[0].format.mime && c.format === path[0].format.format,
+        ) || (handler.supportAnyInput ? path[0].format : undefined);
+
+      if (!inputFormat)
+        throw new Error(
+          `Handler "${handler.name}" doesn't support the "${path[0].format.format}" format.`,
+        );
+
+      if (!handler.ready) {
+        ctx.log(`Initializing ${handler.name}...`);
+        await handler.init();
+        if (!handler.ready) throw new Error(`Handler "${handler.name}" not ready after init.`);
+      }
+
+      ctx.log(
+        `Converting ${path[0].format.format} → ${path[1].format.format} using ${this.name} converter`,
+      );
+      ctx.progress(
+        `${handler.name}: ${path[0].format.format} → ${path[1].format.format}`,
+        (currentStep - 1) / totalSteps,
       );
 
-    if (!handler.ready) {
-      ctx.log(`Initializing ${handler.name}...`);
-      await handler.init();
-      if (!handler.ready) throw new Error(`Handler "${handler.name}" not ready after init.`);
+      const outputFiles = (
+        await Promise.all([
+          handler.doConvert(inputFiles, inputFormat, path[1].format, undefined, ctx),
+          new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+        ])
+      )[0];
+
+      ctx.log(`Step ${currentStep}/${totalSteps} complete`);
+      if (outputFiles.some((c) => !c.bytes.length)) throw "Output is empty.";
+
+      return comlink.transfer({ inputFiles, outputFiles }, [
+        ...new Set([...inputFiles, ...outputFiles].map((file) => file.bytes.buffer)),
+      ]);
+    } finally {
+      abortPort.close();
     }
-
-    ctx.log(`Converting ${path[0].format.format} → ${path[1].format.format} on ${this.name}`);
-    ctx.progress(
-      `${handler.name}: ${path[0].format.format} → ${path[1].format.format}`,
-      (currentStep - 1) / totalSteps,
-    );
-
-    const outputFiles = (
-      await Promise.all([
-        handler.doConvert(inputFiles, inputFormat, path[1].format, undefined, ctx),
-        new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
-      ])
-    )[0];
-
-    ctx.log(`Step ${currentStep}/${totalSteps} complete`);
-    if (outputFiles.some((c) => !c.bytes.length)) throw "Output is empty.";
-
-    return comlink.transfer({ inputFiles, outputFiles }, [
-      ...new Set([...inputFiles, ...outputFiles].map((file) => file.bytes.buffer)),
-    ]);
   }
 }
 

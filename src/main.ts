@@ -124,16 +124,20 @@ async function attemptConvertPath(files: FileData[], path: ConvertPathNode[], ab
 
   const totalSteps = path.length - 1;
   for (let i = 0; i < path.length - 1; i++) {
-    if (abort?.aborted) return null;
+    if (!abort) abort = ProgressStore.controller.signal;
+    if (abort.aborted) return null;
 
     const handlerDef = path[i + 1].handler;
-    const ctx = ProgressStore.createContext(handlerDef.name, abort);
+    const channel = new MessageChannel();
+    const sendAbort = () => channel.port1.postMessage("abort");
+    abort.addEventListener("abort", sendAbort, { once: true });
 
     try {
       const converter = handlerDef.offload ? converterWorker : converterMain;
 
       console.log(`Chose converter ${await converter.name} for ${handlerDef.name}`);
 
+      abort.throwIfAborted();
       const { outputFiles } = await converter.doConvert(
         handlerDef,
         [path[i], path[i + 1]],
@@ -141,14 +145,17 @@ async function attemptConvertPath(files: FileData[], path: ConvertPathNode[], ab
         // comlink.transfer(files, files.map(file => file.bytes.buffer)),
         files,
         { currentStep: i + 1, totalSteps },
-        comlink.proxy(ctx),
+        comlink.proxy(ProgressStore),
+        comlink.transfer(channel.port2, [channel.port2]),
       );
 
       files = outputFiles;
     } catch (e) {
-      if (e instanceof DOMException && e.name === "AbortError") {
+      if (e instanceof Error && e.name === "AbortError") {
         throw e;
       }
+
+      abort.throwIfAborted();
 
       console.log(path.map((c) => c.format.format));
       console.error(handlerDef.name, `${path[i].format.format} → ${path[i + 1].format.format}`, e);
@@ -157,11 +164,14 @@ async function attemptConvertPath(files: FileData[], path: ConvertPathNode[], ab
       deadEndAttempts.push(deadEndPath);
       await window.traversionGraph.addDeadEndPath(path.slice(0, i + 2));
 
-      ctx.log(`Dead end: ${path[i].format.format} → ${path[i + 1].format.format}`);
       ProgressStore.progress("Looking for a valid path...", 0);
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
       return null;
+    } finally {
+      abort.removeEventListener("abort", sendAbort);
+      channel.port1.close();
+      channel.port2.close();
     }
   }
 
