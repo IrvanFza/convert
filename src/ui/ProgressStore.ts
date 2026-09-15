@@ -51,6 +51,7 @@ export const ProgressStore = {
           ...this.logs.value,
           { timestamp: Date.now(), plugin: pluginName, message: msg, level },
         ];
+        console[level](`[${pluginName}] ${msg}`);
       },
       signal: parentSignal,
       throwIfAborted() {

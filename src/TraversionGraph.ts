@@ -558,4 +558,4 @@ export class TraversionGraph {
   }
 }
 
-comlink.expose(new TraversionGraph());
+if (typeof document === "undefined") comlink.expose(TraversionGraph);

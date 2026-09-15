@@ -165,6 +165,11 @@ export interface HandlerDefinition {
    * Conversion using this handler will be performed only if no other direct conversion is found.
    */
   supportAnyInput?: boolean;
+
+  /** Whether the handler supports running in a Web Worker.
+   * Unless you are doing something extraordinary, this should be enabled.
+   */
+  offload?: boolean;
 }
 
 /**
@@ -230,6 +235,7 @@ export function stripHandler(handler: HandlerDefinition): HandlerDefinition {
     name: handler.name,
     supportAnyInput: handler.supportAnyInput,
     supportedFormats: handler.supportedFormats?.map(stripFormat),
+    offload: handler.offload,
   };
 }
 

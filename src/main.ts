@@ -11,6 +11,8 @@ import handlers from "./handlers/index.js";
 import * as comlink from "comlink";
 import type { TraversionGraph } from "./TraversionGraph.js";
 import TraversionGraphWorker from "./TraversionGraph.js?worker";
+import { Converter } from "./Converter.js";
+import ConverterWorker from "./Converter.js?worker";
 import { CurrentPage, LoadingToolsText, Pages } from "./ui/AppState.js";
 import { signal } from "@preact/signals";
 import { Mode, ModeEnum } from "./ui/ModeStore.js";
@@ -35,7 +37,13 @@ export const ConversionsFromAnyInput: ConvertPathNode[] = handlers
   .flatMap((h) => h.supportedFormats!.filter((f) => f.to).map((f) => ({ handler: h, format: f })));
 
 window.supportedFormatCache = new Map();
-window.traversionGraph = comlink.wrap<TraversionGraph>(new TraversionGraphWorker());
+
+const RemoteConverter = comlink.wrap<typeof Converter>(new ConverterWorker());
+const RemoteTraversionGraph = comlink.wrap<typeof TraversionGraph>(new TraversionGraphWorker());
+
+const converterWorker = await new RemoteConverter("web_worker");
+const converterMain = new Converter("main_thread");
+window.traversionGraph = await new RemoteTraversionGraph();
 
 window.printSupportedFormatCache = () => {
   const entries = [];
@@ -58,7 +66,10 @@ async function buildOptionList() {
       }
 
       if (handler.supportedFormats) {
-        window.supportedFormatCache.set(handler.name, handler.supportedFormats);
+        window.supportedFormatCache.set(
+          handler.name,
+          handler.supportedFormats.map((format) => stripFormat(format)),
+        );
         console.info(`Updated supported format cache for "${handler.name}"`);
       }
     }
@@ -77,14 +88,13 @@ async function buildOptionList() {
   }
 
   await window.traversionGraph.init(
-    new Map(
-      [...window.supportedFormatCache].map(([key, value]) => [
-        key,
-        value.map((format) => stripFormat(format)),
-      ]),
-    ),
+    window.supportedFormatCache,
     handlers.map((handler) => stripHandler(handler)),
   );
+
+  converterMain.init(window.supportedFormatCache);
+  await converterWorker.init(window.supportedFormatCache);
+
   LoadingToolsText.value = undefined;
 }
 
@@ -117,55 +127,31 @@ async function attemptConvertPath(files: FileData[], path: ConvertPathNode[], ab
     if (abort?.aborted) return null;
 
     const handlerDef = path[i + 1].handler;
-    const handler = handlers.find((handler) => handler.name == handlerDef.name);
-    if (!handler) throw `Handler "${handlerDef.name}" not found, even though the path contains it.`;
-    const ctx = ProgressStore.createContext(handler.name, abort);
+    const ctx = ProgressStore.createContext(handlerDef.name, abort);
 
     try {
-      let supportedFormats = window.supportedFormatCache.get(handler.name);
+      const converter = handlerDef.offload ? converterWorker : converterMain;
 
-      if (!handler.ready) {
-        ctx.log(`Initializing ${handler.name}...`);
-        await handler.init();
-        if (!handler.ready) throw `Handler "${handler.name}" not ready after init.`;
-        if (handler.supportedFormats) {
-          window.supportedFormatCache.set(handler.name, handler.supportedFormats);
-          supportedFormats = handler.supportedFormats;
-        }
-      }
+      console.log(`Chose converter ${await converter.name} for ${handlerDef.name}`);
 
-      if (!supportedFormats) throw `Handler "${handler.name}" doesn't support any formats.`;
-
-      const inputFormat =
-        supportedFormats.find(
-          (c) => c.from && c.mime === path[i].format.mime && c.format === path[i].format.format,
-        ) || (handler.supportAnyInput ? path[i].format : undefined);
-
-      if (!inputFormat)
-        throw `Handler "${handler.name}" doesn't support the "${path[i].format.format}" format.`;
-
-      ctx.log(`Converting ${path[i].format.format} → ${path[i + 1].format.format}`);
-      ProgressStore.progress(
-        `${handler.name}: ${path[i].format.format} → ${path[i + 1].format.format}`,
-        i / totalSteps,
+      const { outputFiles } = await converter.doConvert(
+        handlerDef,
+        [path[i], path[i + 1]],
+        // todo: make it transfer instead of copy
+        // comlink.transfer(files, files.map(file => file.bytes.buffer)),
+        files,
+        { currentStep: i + 1, totalSteps },
+        comlink.proxy(ctx),
       );
 
-      files = (
-        await Promise.all([
-          handler.doConvert(files, inputFormat, path[i + 1].format, undefined, ctx),
-          new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
-        ])
-      )[0];
-
-      ctx.log(`Step ${i + 1}/${totalSteps} complete`);
-      if (files.some((c) => !c.bytes.length)) throw "Output is empty.";
+      files = outputFiles;
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
         throw e;
       }
 
       console.log(path.map((c) => c.format.format));
-      console.error(handler.name, `${path[i].format.format} → ${path[i + 1].format.format}`, e);
+      console.error(handlerDef.name, `${path[i].format.format} → ${path[i + 1].format.format}`, e);
 
       const deadEndPath = path.slice(0, i + 2);
       deadEndAttempts.push(deadEndPath);
