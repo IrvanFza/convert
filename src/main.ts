@@ -118,7 +118,7 @@ async function attemptConvertPath(files: FileData[], path: ConvertPathNode[], ab
 
     const handlerDef = path[i + 1].handler;
     const handler = handlers.find((handler) => handler.name == handlerDef.name);
-    if (!handler) throw `Handler "${handlerDef.name}" not ready after init.`;
+    if (!handler) throw `Handler "${handlerDef.name}" not found, even though the path contains it.`;
     const ctx = ProgressStore.createContext(handler.name, abort);
 
     try {
