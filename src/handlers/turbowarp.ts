@@ -15,7 +15,8 @@ class turbowarpHandler implements FormatHandler {
       format: "sb3",
       extension: "sb3",
       mime: "application/x.scratch.sb3",
-      from: true,
+      // from: true,
+      from: false,
       to: true,
       internal: "sb3",
       category: Category.ARCHIVE,
@@ -28,7 +29,7 @@ class turbowarpHandler implements FormatHandler {
   private unpackager?: any;
 
   async init() {
-    this.unpackager = await import("./turbowarp/unpackager/unpackager.js");
+    // this.unpackager = await import("./turbowarp/unpackager/unpackager.js");
     this.ready = true;
   }
 
@@ -53,12 +54,15 @@ class turbowarpHandler implements FormatHandler {
           bytes,
         });
       } else if (inputFormat.internal === "html") {
+        throw new Error("unimplemented");
+        /*
         const data = (await this.unpackager(inputFile.bytes)).data;
         const bytes = new Uint8Array(data);
         outputFiles.push({
           name: inputFile.name.replace(/\.html$/, ".sb3"),
           bytes,
         });
+        */
       } else {
         throw new Error(
           `turbowarpHandler cannot convert from ${inputFormat.mime} to ${outputFormat.mime}`,
