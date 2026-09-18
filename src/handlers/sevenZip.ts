@@ -25,7 +25,7 @@ class sevenZipHandler implements FormatHandler {
   public ready: boolean = false;
 
   public supportAnyInput: boolean = true;
-  public offload?: boolean = true;
+  public offload: boolean = true;
 
   #tarCompressedFormats: string[] = [];
 

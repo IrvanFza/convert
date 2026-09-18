@@ -183,7 +183,7 @@ export interface HandlerDefinition {
    * make sure your reason is really good. Try replacing `HTMLCanvasElement` -> `OffscreenCanvas`
    * (`toBlob()` -> `convertToBlob()`), `new Image()` -> `createImageBitmap()`, and avoiding audio APIs.
    */
-  offload?: boolean;
+  offload: boolean;
 }
 
 /**
