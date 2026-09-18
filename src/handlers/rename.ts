@@ -16,10 +16,10 @@ function renameHandler(name: string, formats: FileFormat[]): FormatHandler {
       inputFormat: FileFormat,
       outputFormat: FileFormat,
     ): Promise<FileData[]> {
-      return inputFiles.map((file) => {
-        file.name = file.name.split(".").slice(0, -1).join(".") + "." + outputFormat.extension;
-        return file;
-      });
+      return inputFiles.map((file) => ({
+        ...file,
+        name: file.name.split(".").slice(0, -1).join(".") + "." + outputFormat.extension,
+      }));
     },
   };
 }
