@@ -100,7 +100,11 @@ async function buildOptionList() {
 
 let deadEndAttempts: ConvertPathNode[][];
 
-async function attemptConvertPath(files: FileData[], path: ConvertPathNode[], abort?: AbortSignal) {
+async function attemptConvertPath(
+  originalFiles: FileData[],
+  path: ConvertPathNode[],
+  abort?: AbortSignal,
+) {
   const pathString = path.map((c) => c.format.format).join(" → ");
 
   for (const deadEnd of deadEndAttempts) {
@@ -127,6 +131,8 @@ async function attemptConvertPath(files: FileData[], path: ConvertPathNode[], ab
 
   ProgressStore.progress(`Trying ${pathString}...`, 0);
 
+  let files = originalFiles;
+
   const totalSteps = path.length - 1;
   for (let i = 0; i < path.length - 1; i++) {
     if (!abort) abort = ProgressStore.controller.signal;
@@ -143,18 +149,39 @@ async function attemptConvertPath(files: FileData[], path: ConvertPathNode[], ab
       console.log(`Chose converter ${await converter.name} for ${handlerDef.name}`);
 
       abort.throwIfAborted();
-      const { outputFiles } = await converter.doConvert(
+
+      // this is annoying
+      const restore = originalFiles.map((original) => ({
+        original,
+        inputIndex: files.findIndex((file) => file.bytes.buffer === original.bytes.buffer),
+        offset: original.bytes.byteOffset,
+        length: original.bytes.byteLength,
+      }));
+
+      const result = await converter.doConvert(
         handlerDef,
         [path[i], path[i + 1]],
-        // todo: make it transfer instead of copy
-        // comlink.transfer(files, files.map(file => file.bytes.buffer)),
-        files,
+        comlink.transfer(files, [...new Set([...files].map((file) => file.bytes.buffer))]),
         { currentStep: i + 1, totalSteps },
         comlink.proxy(ProgressStore),
         comlink.transfer(channel.port2, [channel.port2]),
       );
 
-      files = outputFiles;
+      for (const { original, inputIndex, offset, length } of restore) {
+        if (inputIndex !== -1) {
+          original.bytes = new Uint8Array(
+            result.inputFiles[inputIndex].bytes.buffer,
+            offset,
+            length,
+          );
+        }
+      }
+
+      if (result.ok) {
+        files = result.outputFiles;
+      } else {
+        throw Object.assign(new Error(result.error.message), result.error);
+      }
     } catch (e) {
       if (e instanceof Error && e.name === "AbortError") {
         throw e;

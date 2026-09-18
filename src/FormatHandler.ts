@@ -152,7 +152,7 @@ export interface FileData {
    * and consistency of this buffer. If you're not sure that your handler
    * won't modify it, wrap it in `new Uint8Array()`.
    */
-  readonly bytes: Uint8Array;
+  bytes: Uint8Array;
 }
 
 export interface HandlerDefinition {

@@ -12,6 +12,18 @@ if (!("window" in globalThis)) {
   (globalThis as unknown as { window: typeof globalThis }).window = globalThis;
 }
 
+type ConvertResult = { inputFiles: FileData[] } & (
+  | {
+      ok: false;
+      error: {
+        name: string;
+        stack?: string;
+        message: string;
+      };
+    }
+  | { ok: true; outputFiles: FileData[] }
+);
+
 export class Converter {
   public name: string;
   private supportedFormatCache?: Map<string, FileFormat[]>;
@@ -35,7 +47,7 @@ export class Converter {
     { currentStep, totalSteps }: { currentStep: number; totalSteps: number },
     progressStore: IProgressStore,
     abortPort: MessagePort,
-  ): Promise<{ inputFiles: FileData[]; outputFiles: FileData[] }> {
+  ): Promise<ConvertResult> {
     const controller = new AbortController();
     abortPort.addEventListener("message", ({ data }) => {
       if (data === "abort") controller.abort();
@@ -88,9 +100,23 @@ export class Converter {
       ctx.log(`Step ${currentStep}/${totalSteps} complete`);
       if (outputFiles.some((c) => !c.bytes.length)) throw "Output is empty.";
 
-      return comlink.transfer({ inputFiles, outputFiles }, [
+      return comlink.transfer({ ok: true, inputFiles, outputFiles }, [
         ...new Set([...inputFiles, ...outputFiles].map((file) => file.bytes.buffer)),
       ]);
+    } catch (e) {
+      const error = e instanceof Error ? e : new Error(String(e));
+      return comlink.transfer(
+        {
+          ok: false,
+          inputFiles,
+          error: {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+          },
+        },
+        [...new Set([...inputFiles].map((file) => file.bytes.buffer))],
+      );
     } finally {
       abortPort.close();
     }
