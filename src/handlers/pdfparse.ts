@@ -9,6 +9,7 @@ class pdfparseHandler implements FormatHandler {
     CommonFormats.TEXT.builder("txt").allowTo(),
   ];
   public ready: boolean = false;
+  public offload: boolean = true;
 
   async init() {
     PDFParse.setWorker("/convert/js/pdf.worker.mjs");

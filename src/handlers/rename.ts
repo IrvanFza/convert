@@ -7,6 +7,7 @@ function renameHandler(name: string, formats: FileFormat[]): FormatHandler {
     name: name,
     ready: true,
     supportedFormats: formats,
+    offload: true,
     async init() {
       this.ready = true;
     },

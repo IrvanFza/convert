@@ -1,5 +1,4 @@
 import { signal } from "@preact/signals";
-import * as comlink from "comlink";
 
 export type LogLevel = "log" | "error" | "debug" | "warn";
 

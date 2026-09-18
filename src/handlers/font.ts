@@ -226,6 +226,7 @@ class fontHandler implements FormatHandler {
   public name: string = "font";
   public supportedFormats?: FileFormat[];
   public ready: boolean = false;
+  public offload: boolean = false; // svg
 
   async init() {
     this.supportedFormats = [

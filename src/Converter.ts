@@ -6,7 +6,7 @@ import type {
   FormatHandler,
   HandlerDefinition,
 } from "./FormatHandler";
-import { createRemoteContext, type ConvertContext, type IProgressStore } from "./ui/ProgressStore";
+import { createRemoteContext, type IProgressStore } from "./ui/ProgressStore";
 
 if (!("window" in globalThis)) {
   (globalThis as unknown as { window: typeof globalThis }).window = globalThis;

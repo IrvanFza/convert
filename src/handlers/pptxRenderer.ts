@@ -51,6 +51,7 @@ export default class pptxRendererHandler implements FormatHandler {
   public name: string = "pptxRenderer";
 
   public ready: boolean = false;
+  public offload: boolean = false; // dom heavy
 
   private html2canvas?: any;
 

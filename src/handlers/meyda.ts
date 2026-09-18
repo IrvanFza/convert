@@ -14,6 +14,7 @@ class meydaHandler implements FormatHandler {
     CommonFormats.WEBP.supported("image", true, true),
   ];
   public ready: boolean = false;
+  public offload: boolean = false; // AudioContext + audio element codec detection
 
   #audioContext?: AudioContext;
   #canvas?: HTMLCanvasElement;

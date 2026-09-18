@@ -16,6 +16,7 @@ class vexFlowHandler implements FormatHandler {
   public name: string = "vexFlow";
   public supportedFormats?: FileFormat[];
   public ready: boolean = false;
+  public offload: boolean = false; // dom stuff
   private static fontsLoaded = false;
 
   async init() {

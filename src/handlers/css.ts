@@ -26,6 +26,7 @@ class cssHandler implements FormatHandler {
   public name: string = "css";
   public supportedFormats?: FileFormat[];
   public ready: boolean = false;
+  public offload: boolean = false; // less uses document
 
   async init() {
     this.supportedFormats = [

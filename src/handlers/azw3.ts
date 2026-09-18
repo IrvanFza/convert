@@ -8,6 +8,7 @@ class azw3Handler implements FormatHandler {
   public name: string = "azw3";
   public supportedFormats?: FileFormat[];
   public ready: boolean = false;
+  public offload: boolean = false; // xml
 
   async init() {
     this.supportedFormats = [
