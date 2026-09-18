@@ -175,6 +175,7 @@ test(
     expect(conversion).toBeTruthy();
     expect(conversion!.path.map((c) => c.format.mime)).toEqual([
       "audio/mpeg",
+      "audio/wav",
       "image/png",
       "image/gif",
     ]);
