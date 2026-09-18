@@ -15,9 +15,9 @@ class turbowarpHandler implements FormatHandler {
       format: "sb3",
       extension: "sb3",
       mime: "application/x.scratch.sb3",
-      // from: true,
-      from: false,
-      to: true,
+      from: true,
+      // to: true,
+      to: false,
       internal: "sb3",
       category: Category.ARCHIVE,
       lossless: true, // all project data is in the html
