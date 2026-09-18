@@ -169,7 +169,8 @@ async function attemptConvertPath(
 
       for (const { original, inputIndex, offset, length } of restore) {
         if (inputIndex !== -1) {
-          original.bytes = new Uint8Array(
+          // we dont want handlers messing with it but we need to mess with it
+          (original as { bytes: Uint8Array }).bytes = new Uint8Array(
             result.inputFiles[inputIndex].bytes.buffer,
             offset,
             length,
