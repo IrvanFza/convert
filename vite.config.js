@@ -1,6 +1,5 @@
 import { defineConfig } from "vite";
 import { viteStaticCopy } from "vite-plugin-static-copy";
-import tsconfigPaths from "vite-tsconfig-paths";
 import preact from "@preact/preset-vite";
 
 export default defineConfig({
@@ -11,7 +10,9 @@ export default defineConfig({
   base: "/convert/",
   worker: {
     format: "es",
-    plugins: () => [tsconfigPaths()],
+  },
+  resolve: {
+    tsconfigPaths: true,
   },
   plugins: [
     viteStaticCopy({
@@ -86,7 +87,6 @@ export default defineConfig({
         },
       ],
     }),
-    tsconfigPaths(),
     preact({
       prefreshEnabled: false,
       reactAliasesEnabled: true,
