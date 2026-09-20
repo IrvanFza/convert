@@ -54,6 +54,7 @@
     "@xmldom/xmldom": "^0.9.12",
     "@yowasp/clang": "^22.0.0-git20542-10",
     "bson": "^7.2.0",
+    "buffer": "^6.0.3",
     "celaria-formats": "^1.0.2",
     "chess.js": "^1.4.0",
     "comlink": "^4.4.2",
