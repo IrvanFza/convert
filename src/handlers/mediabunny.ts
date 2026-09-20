@@ -1,7 +1,11 @@
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
 import { Category } from "src/CommonFormats.ts";
-import * as mb from "mediabunny";
 import type { ConvertContext } from "src/ui/ProgressStore.ts";
+import normalizeMimeType from "src/normalizeMimeType.ts";
+import * as mb from "mediabunny";
+import { registerFlacEncoder } from "@mediabunny/flac-encoder";
+import { registerMp3Encoder } from "@mediabunny/mp3-encoder";
+import { registerAacEncoder } from "@mediabunny/aac-encoder";
 
 const FORMATS = new Map<string, { input: mb.InputFormat; output: mb.OutputFormat }>([
   ["mp4", { input: mb.MP4, output: new mb.Mp4OutputFormat() }],
@@ -18,6 +22,9 @@ const FORMATS = new Map<string, { input: mb.InputFormat; output: mb.OutputFormat
   // ["m3u8", { input: mb.HLS, output: new mb.HlsOutputFormat({ segmentFormat: new mb.MpegTsOutputFormat() }) }],
 ]);
 
+const anyOrNone = async <T>(items: T[], fn: (item: T) => Promise<boolean>) =>
+  !items.length || (await Promise.all(items.map((item) => fn(item)))).some(Boolean);
+
 class mediabunnyHandler implements FormatHandler {
   public name: string = "mediabunny";
   public supportedFormats: FileFormat[] = [];
@@ -25,20 +32,44 @@ class mediabunnyHandler implements FormatHandler {
   public offload: boolean = true;
 
   async init() {
+    if (!(await mb.canEncodeAudio("flac"))) {
+      registerFlacEncoder();
+    }
+    if (!(await mb.canEncodeAudio("mp3"))) {
+      registerMp3Encoder();
+    }
+    if (!(await mb.canEncodeAudio("aac"))) {
+      registerAacEncoder();
+    }
+
     for (const [name, { input, output }] of FORMATS) {
+      const videoCodecs = output.getSupportedVideoCodecs();
+      const audioCodecs = output.getSupportedAudioCodecs();
+
+      const canDecodeVideo = await anyOrNone(videoCodecs, mb.canDecodeVideo);
+      const canEncodeVideo = await anyOrNone(videoCodecs, mb.canEncodeVideo);
+      const canDecodeAudio = await anyOrNone(audioCodecs, mb.canDecodeAudio);
+      const canEncodeAudio = await anyOrNone(audioCodecs, mb.canEncodeAudio);
+      let category;
+      let from, to;
       const tracks = output.getSupportedTrackCounts();
-      const category = [];
-      if (tracks.audio.max > 0) category.push(Category.AUDIO);
-      if (tracks.video.max > 0) category.push(Category.VIDEO);
-      if (category.length === 0) throw new Error(`${name} had no categories`);
+      if (tracks.video.max > 0) {
+        category = Category.VIDEO;
+        from = canDecodeAudio && canDecodeVideo;
+        to = canEncodeAudio && canEncodeVideo;
+      } else {
+        category = Category.AUDIO;
+        from = canDecodeAudio;
+        to = canEncodeAudio;
+      }
 
       this.supportedFormats.push({
         name: input.name,
         format: name,
         extension: name,
-        mime: input.mimeType,
-        from: true,
-        to: true,
+        mime: normalizeMimeType(input.mimeType),
+        from,
+        to,
         internal: name,
         category,
         lossless: false,
