@@ -1,6 +1,6 @@
 import { TraversionGraph } from "../src/TraversionGraph";
 import CommonFormats from "../src/CommonFormats.ts";
-import { ConvertPathNode, type FileFormat, type FormatHandler } from "../src/FormatHandler.ts";
+import { ConvertPathNode, type FormatHandler } from "../src/FormatHandler.ts";
 import { MockedHandler } from "./MockedHandler.ts";
 import { expect, test } from "bun:test";
 
@@ -40,28 +40,10 @@ const handlers: FormatHandler[] = [
   ),
 ];
 
-let supportedFormatCache = new Map<string, FileFormat[]>();
-for (const handler of handlers) {
-  if (!supportedFormatCache.has(handler.name)) {
-    try {
-      await handler.init();
-    } catch {
-      continue;
-    }
-    if (handler.supportedFormats) {
-      supportedFormatCache.set(handler.name, handler.supportedFormats);
-    }
-  }
-  const supportedFormats = supportedFormatCache.get(handler.name);
-  if (!supportedFormats) {
-    continue;
-  }
-}
-
 console.log("Testing...\n");
 test("should find the optimal path from image to audio\n", async () => {
   const graph = new TraversionGraph();
-  graph.init(supportedFormatCache, handlers);
+  graph.init(handlers);
 
   const paths = graph.searchPath(
     new ConvertPathNode(
@@ -84,7 +66,7 @@ test("should find the optimal path from image to audio\n", async () => {
 
 test("should find the optimal path from image to audio in strict graph\n", async () => {
   const graph = new TraversionGraph();
-  graph.init(supportedFormatCache, handlers, true);
+  graph.init(handlers, true);
 
   const paths = graph.searchPath(
     new ConvertPathNode(
@@ -107,7 +89,7 @@ test("should find the optimal path from image to audio in strict graph\n", async
 
 test("add category change costs should affect pathfinding\n", async () => {
   const graph = new TraversionGraph();
-  graph.init(supportedFormatCache, handlers);
+  graph.init(handlers);
 
   const paths = graph.searchPath(
     new ConvertPathNode(
@@ -124,7 +106,7 @@ test("add category change costs should affect pathfinding\n", async () => {
   for await (const path of paths) extractedPaths.push(path);
 
   graph.addCategoryChangeCost("image", "audio", 100);
-  graph.init(supportedFormatCache, handlers);
+  graph.init(handlers);
   const newPaths = graph.searchPath(
     new ConvertPathNode(
       handlers.find((h) => h.name === "canvasToBlob")!,
@@ -146,7 +128,7 @@ test("add category change costs should affect pathfinding\n", async () => {
 test("remove category change costs should affect pathfinding\n", async () => {
   const graph = new TraversionGraph();
   graph.updateCategoryChangeCost("image", "audio", 100);
-  graph.init(supportedFormatCache, handlers);
+  graph.init(handlers);
 
   const paths = graph.searchPath(
     new ConvertPathNode(
@@ -163,7 +145,7 @@ test("remove category change costs should affect pathfinding\n", async () => {
   for await (const path of paths) extractedPaths.push(path);
 
   graph.removeCategoryChangeCost("image", "audio");
-  graph.init(supportedFormatCache, handlers);
+  graph.init(handlers);
   const newPaths = graph.searchPath(
     new ConvertPathNode(
       handlers.find((h) => h.name === "canvasToBlob")!,
@@ -184,7 +166,7 @@ test("remove category change costs should affect pathfinding\n", async () => {
 
 test("add adaptive category costs should affect pathfinding\n", async () => {
   const graph = new TraversionGraph();
-  graph.init(supportedFormatCache, handlers);
+  graph.init(handlers);
 
   const paths = graph.searchPath(
     new ConvertPathNode(
@@ -201,7 +183,7 @@ test("add adaptive category costs should affect pathfinding\n", async () => {
   for await (const path of paths) extractedPaths.push(path);
 
   graph.addCategoryAdaptiveCost(["image", "audio"], 20000);
-  graph.init(supportedFormatCache, handlers);
+  graph.init(handlers);
   const newPaths = graph.searchPath(
     new ConvertPathNode(
       handlers.find((h) => h.name === "canvasToBlob")!,
@@ -222,7 +204,7 @@ test("add adaptive category costs should affect pathfinding\n", async () => {
 
 test("remove adaptive category costs should affect pathfinding\n", async () => {
   const graph = new TraversionGraph();
-  graph.init(supportedFormatCache, handlers);
+  graph.init(handlers);
 
   const paths = graph.searchPath(
     new ConvertPathNode(
@@ -239,7 +221,7 @@ test("remove adaptive category costs should affect pathfinding\n", async () => {
   for await (const path of paths) extractedPaths.push(path);
 
   graph.removeCategoryAdaptiveCost(["image", "video", "audio"]);
-  graph.init(supportedFormatCache, handlers);
+  graph.init(handlers);
   const newPaths = graph.searchPath(
     new ConvertPathNode(
       handlers.find((h) => h.name === "canvasToBlob")!,
@@ -260,7 +242,7 @@ test("remove adaptive category costs should affect pathfinding\n", async () => {
 
 test("should find path from image to archive via anyinput\n", async () => {
   const graph = new TraversionGraph();
-  graph.init(supportedFormatCache, handlers);
+  graph.init(handlers);
 
   const paths = graph.searchPath(
     new ConvertPathNode(

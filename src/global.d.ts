@@ -1,10 +1,10 @@
-import type { FileFormat, FileData, ConvertPathNode } from "./FormatHandler.js";
+import type { FileData, ConvertPathNode, HandlerDefinition } from "./FormatHandler.js";
 import type { TraversionGraph } from "./TraversionGraph.js";
 import type { Remote } from "comlink";
 
 declare global {
   interface Window {
-    supportedFormatCache: Map<string, FileFormat[]>;
+    handlerCache: HandlerDefinition[];
     traversionGraph: Remote<TraversionGraph>;
     printSupportedFormatCache: () => string;
     showPopup: (html: string) => void;

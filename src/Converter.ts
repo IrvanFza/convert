@@ -1,11 +1,5 @@
 import * as comlink from "comlink";
-import type {
-  ConvertPathNode,
-  FileData,
-  FileFormat,
-  FormatHandler,
-  HandlerDefinition,
-} from "./FormatHandler";
+import type { ConvertPathNode, FileData, FormatHandler, HandlerDefinition } from "./FormatHandler";
 import { createRemoteContext, type IProgressStore } from "./ui/ProgressStore";
 
 if (!("window" in globalThis)) {
@@ -26,17 +20,19 @@ type ConvertResult = { inputFiles: FileData[] } & (
 
 export class Converter {
   public name: string;
-  private supportedFormatCache?: Map<string, FileFormat[]>;
   private handlers?: FormatHandler[];
 
   public constructor(name: string) {
     this.name = name;
   }
 
-  public async init(supportedFormatCache: Map<string, FileFormat[]>) {
+  public async init(handlerCache: HandlerDefinition[]) {
     console.log(`Initializing converter ${this.name}...`);
-    this.supportedFormatCache = supportedFormatCache;
     this.handlers = (await import("./handlers/index")).default;
+    for (const handler of this.handlers) {
+      const cachedHandler = handlerCache.find((h) => h.name === handler.name);
+      Object.assign(handler, cachedHandler);
+    }
     console.log(`Converter ${this.name} ready.`);
   }
 
@@ -57,17 +53,15 @@ export class Converter {
     const ctx = createRemoteContext(progressStore, handlerDef.name, controller.signal);
 
     try {
-      if (!this.supportedFormatCache || !this.handlers) throw new Error("Converter not ready.");
+      if (!this.handlers) throw new Error("Converter not ready.");
       const handler = this.handlers.find((handler) => handler.name === handlerDef.name);
       if (!handler) throw new Error(`Handler "${handlerDef.name}" not found.`);
 
-      const supportedFormats = this.supportedFormatCache.get(handler.name);
-
-      if (!supportedFormats)
+      if (!handler.supportedFormats)
         throw new Error(`Handler "${handler.name}" doesn't support any formats.`);
 
       const inputFormat =
-        supportedFormats.find(
+        handler.supportedFormats.find(
           (c) => c.from && c.mime === path[0].format.mime && c.format === path[0].format.format,
         ) || (handler.supportAnyInput ? path[0].format : undefined);
 

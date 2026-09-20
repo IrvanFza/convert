@@ -3,7 +3,6 @@ import {
   type FileData,
   type FormatHandler,
   type ConvertPathNode,
-  stripFormat,
   stripHandler,
   stripPathNode,
 } from "./FormatHandler.js";
@@ -36,7 +35,7 @@ export const ConversionsFromAnyInput: ConvertPathNode[] = handlers
   .filter((h) => h.supportAnyInput && h.supportedFormats)
   .flatMap((h) => h.supportedFormats!.filter((f) => f.to).map((f) => ({ handler: h, format: f })));
 
-window.supportedFormatCache = new Map();
+window.handlerCache = [];
 
 const RemoteConverter = comlink.wrap<typeof Converter>(new ConverterWorker());
 const RemoteTraversionGraph = comlink.wrap<typeof TraversionGraph>(new TraversionGraphWorker());
@@ -46,17 +45,15 @@ const converterMain = new Converter("main_thread");
 window.traversionGraph = await new RemoteTraversionGraph();
 
 window.printSupportedFormatCache = () => {
-  const entries = [];
-  for (const entry of window.supportedFormatCache) entries.push(entry);
-  return JSON.stringify(entries, null, 2);
+  return JSON.stringify(window.handlerCache, null, 2);
 };
 
 async function buildOptionList() {
   ConversionOptions.clear();
 
   for (const handler of handlers) {
-    if (!window.supportedFormatCache.has(handler.name)) {
-      console.warn(`Cache miss for formats of handler "${handler.name}"`);
+    if (!window.handlerCache.some((h) => h.name === handler.name)) {
+      console.warn(`Cache miss for handler "${handler.name}"`);
 
       try {
         await handler.init();
@@ -66,34 +63,29 @@ async function buildOptionList() {
       }
 
       if (handler.supportedFormats) {
-        window.supportedFormatCache.set(
-          handler.name,
-          handler.supportedFormats.map((format) => stripFormat(format)),
-        );
+        window.handlerCache.push(stripHandler(handler));
         console.info(`Updated supported format cache for "${handler.name}"`);
       }
     }
 
-    const supportedFormats = window.supportedFormatCache.get(handler.name);
+    const cachedHandler = window.handlerCache.find((h) => h.name === handler.name);
+    Object.assign(handler, cachedHandler);
 
-    if (!supportedFormats) {
+    if (!handler.supportedFormats) {
       console.warn(`Handler "${handler.name}" doesn't support any formats`);
       continue;
     }
 
-    for (const format of supportedFormats) {
+    for (const format of handler.supportedFormats) {
       if (!format.mime) continue;
       ConversionOptions.set(format, handler);
     }
   }
 
-  await window.traversionGraph.init(
-    window.supportedFormatCache,
-    handlers.map((handler) => stripHandler(handler)),
-  );
+  await window.traversionGraph.init(window.handlerCache);
 
-  converterMain.init(window.supportedFormatCache);
-  await converterWorker.init(window.supportedFormatCache);
+  converterMain.init(window.handlerCache);
+  await converterWorker.init(window.handlerCache);
 
   LoadingToolsText.value = undefined;
 }
@@ -239,8 +231,7 @@ window.tryConvertByTraversing = async function (
 async function initSupportedFormats() {
   try {
     try {
-      const cacheJSON = await fetch("cache.json").then((r) => r.json());
-      window.supportedFormatCache = new Map(cacheJSON);
+      window.handlerCache = await fetch("cache.json").then((r) => r.json());
     } catch {
       console.warn(
         "Missing supported format precache.\n\n" +

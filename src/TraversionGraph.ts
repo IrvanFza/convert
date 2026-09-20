@@ -164,14 +164,10 @@ export class TraversionGraph {
   }
 
   /**
-   * Initializes the traversion graph based on the supported formats and handlers. This should be called after all handlers have been registered and their supported formats have been cached in window.supportedFormatCache. The graph is built by creating nodes for each unique file format and edges for each possible conversion between formats based on the handlers' capabilities.
+   * Initializes the traversion graph based on the handlers. This should be called after all handlers have been registered and their supported formats have been assigned to them. The graph is built by creating nodes for each unique file format and edges for each possible conversion between formats based on the handlers' capabilities.
    * @param strictCategories If true, the algorithm will apply category change costs more strictly, even when formats share categories. This can lead to more accurate pathfinding at the cost of potentially longer paths and increased search time. If false, category change costs will only be applied when formats do not share any categories, allowing for more flexible pathfinding that may yield shorter paths but with less nuanced cost calculations.
    */
-  public init(
-    supportedFormatCache: Map<string, FileFormat[]>,
-    handlers: HandlerDefinition[],
-    strictCategories: boolean = false,
-  ) {
+  public init(handlers: HandlerDefinition[], strictCategories: boolean = false) {
     this.handlers = handlers;
     this.nodes.length = 0;
     this.edges.length = 0;
@@ -200,10 +196,10 @@ export class TraversionGraph {
     const startTime = performance.now();
 
     let handlerIndex = 0;
-    supportedFormatCache.forEach((formats, handler) => {
+    handlers.forEach((handler) => {
       let fromIndices: Array<{ format: FileFormat; index: number }> = [];
       let toIndices: Array<{ format: FileFormat; index: number }> = [];
-      formats.forEach((format) => {
+      handler.supportedFormats?.forEach((format) => {
         const formatIdentifier = format.mime + `(${format.format})`;
         let index = this.nodeIndexByIdentifier.get(formatIdentifier) ?? -1;
         if (index === -1) {
@@ -224,8 +220,8 @@ export class TraversionGraph {
           this.edges.push({
             from: from,
             to: to,
-            handler: handler,
-            cost: this.costFunction(from, to, strictCategories, handler, handlerIndex),
+            handler: handler.name,
+            cost: this.costFunction(from, to, strictCategories, handler.name, handlerIndex),
           });
           this.nodes[from.index].edges.push(this.edges.length - 1);
         });
@@ -238,12 +234,11 @@ export class TraversionGraph {
     // from every known format node to their output formats.
     handlers.forEach((handler, hIndex) => {
       if (!handler.supportAnyInput) return;
-      const formats = supportedFormatCache.get(handler.name);
-      if (!formats) return;
+      if (!handler.supportedFormats) return;
 
       // Collect output format node indices for this handler
       const toEntries: Array<{ format: FileFormat; index: number }> = [];
-      for (const f of formats) {
+      for (const f of handler.supportedFormats) {
         if (!f.to) continue;
         const id = f.mime + `(${f.format})`;
         const idx = this.nodeIndexByIdentifier.get(id) ?? -1;
