@@ -75,7 +75,7 @@ class mediabunnyHandler implements FormatHandler {
 
       conversion.onProgress = (progress, seconds) => {
         ctx?.progress(
-          `Transcoding... (${seconds.toFixed(1)}s elapsed)`,
+          `Transcoding... (${seconds.toFixed(1)}s processed)`,
           (i + progress) / inputFiles.length,
         );
       };
