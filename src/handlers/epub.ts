@@ -2,6 +2,10 @@ import CommonFormats from "../CommonFormats.ts";
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
 import type { ConvertContext } from "../ui/ProgressStore.ts";
 import ePub from "epubjs";
+import { DOMParser as WorkerDOMParser } from "linkedom/worker";
+import { XMLSerializer } from "@xmldom/xmldom";
+
+const DOMParser = WorkerDOMParser as unknown as typeof globalThis.DOMParser;
 
 function blobUrlRegex() {
   return /url\(\s*(['"]?)(blob:[^'")\s]+)\1\s*\)/gu;
@@ -57,7 +61,7 @@ async function inlineBlobBackedAttributes(printDoc: Document, cache: Map<string,
   const attributeNames = ["src", "poster", "href", "xlink:href", "data"];
 
   for (const attributeName of attributeNames) {
-    const nodes = Array.from(printDoc.querySelectorAll(`[${CSS.escape(attributeName)}]`));
+    const nodes = Array.from(printDoc.querySelectorAll(`[${attributeName.replace(":", "\\:")}]`));
     await Promise.all(
       nodes.map(async (node) => {
         const value = node.getAttribute(attributeName);
@@ -110,7 +114,7 @@ async function inlineBlobBackedAttributes(printDoc: Document, cache: Map<string,
 export default class epubHandler implements FormatHandler {
   public name: string = "epub";
   public ready: boolean = false;
-  public offload: boolean = false; // uses iframes and shit
+  public offload: boolean = true;
 
   public supportedFormats: FileFormat[] = [
     CommonFormats.EPUB.supported("epub", true, false),
@@ -137,21 +141,6 @@ export default class epubHandler implements FormatHandler {
       const baseName = file.name.replace(/\.[^.]+$/u, "");
 
       if (outputFormat.internal === "html") {
-        const printIframe = document.createElement("iframe");
-        printIframe.style.width = "100%";
-        printIframe.style.height = "600px";
-        printIframe.style.display = "none";
-        document.body.appendChild(printIframe);
-
-        const printDoc = printIframe.contentDocument || printIframe.contentWindow?.document;
-        if (!printDoc) throw new Error("Could not create print iframe");
-
-        const epubContainer = document.createElement("div");
-        epubContainer.style.position = "absolute";
-        epubContainer.style.top = "-9999px";
-        epubContainer.style.visibility = "hidden";
-        document.body.appendChild(epubContainer);
-
         // Extract buffer
         const arrayBuffer = file.bytes.buffer.slice(
           file.bytes.byteOffset,
@@ -160,11 +149,11 @@ export default class epubHandler implements FormatHandler {
 
         ctx?.log(`Parsing EPUB buffer (${file.bytes.byteLength} bytes)...`);
         const currentBook = ePub(arrayBuffer as ArrayBuffer);
-        await currentBook.ready;
+        await currentBook.opened;
         ctx?.log(`EPUB ready. Formatting container...`);
 
-        printDoc.open();
-        printDoc.write(`
+        const printDoc = new DOMParser().parseFromString(
+          `
           <!DOCTYPE html>
           <html>
             <head>
@@ -203,8 +192,9 @@ export default class epubHandler implements FormatHandler {
               <div id="print-content"></div>
             </body>
           </html>
-        `);
-        printDoc.close();
+        `,
+          "text/html",
+        );
 
         const printContent = printDoc.getElementById("print-content")!;
         const head = printDoc.head;
@@ -227,20 +217,6 @@ export default class epubHandler implements FormatHandler {
         let currentIndex = 0;
 
         const processWorker = async () => {
-          const container = document.createElement("div");
-          container.style.position = "absolute";
-          container.style.visibility = "hidden";
-          container.style.width = "800px";
-          container.style.height = "600px";
-          epubContainer.appendChild(container);
-
-          const rendition = currentBook.renderTo(container, {
-            width: 800,
-            height: 600,
-            manager: "continuous",
-            flow: "scrolled",
-          });
-
           while (true) {
             const index = currentIndex++;
             if (index >= totalSpineItems) break;
@@ -252,25 +228,22 @@ export default class epubHandler implements FormatHandler {
               : spineItems[index];
 
             try {
-              await rendition.display(item.href);
-              const contentsList = rendition.getContents() as any;
+              await item.load(currentBook.load.bind(currentBook));
+              const html = currentBook.resources.substitute(
+                new XMLSerializer().serializeToString(item.document),
+                item.url,
+              );
+              const sectionDoc = new DOMParser().parseFromString(html, "text/html");
+              const headStyles = Array.from(
+                sectionDoc.querySelectorAll('style, link[rel="stylesheet"]'),
+              ).map((node) => node.outerHTML);
+              const bodyHTML = sectionDoc.body.innerHTML;
 
-              if (contentsList && contentsList.length > 0) {
-                const sectionDoc = contentsList[0].document;
-                const headStyles = Array.from(
-                  sectionDoc.querySelectorAll('style, link[rel="stylesheet"]'),
-                ).map((node: any) => node.outerHTML);
-                const bodyHTML = sectionDoc.body.innerHTML;
-
-                results[index] = { headStyles, bodyHTML };
-              }
+              results[index] = { headStyles, bodyHTML };
             } catch (e) {
               ctx?.log(`Failed to render chapter ${index + 1}: ${e}`, "error");
             }
           }
-
-          rendition.destroy();
-          container.remove();
         };
 
         const workers = Array.from({ length: Math.min(CONCURRENCY, totalSpineItems) }, () =>
@@ -328,9 +301,7 @@ export default class epubHandler implements FormatHandler {
         ctx?.log("Assembling final HTML layout buffer...");
         const finalHtml = "<!DOCTYPE html>\n" + printDoc.documentElement.outerHTML;
 
-        // Remove helper nodes
-        printIframe.remove();
-        epubContainer.remove();
+        currentBook.destroy();
 
         outputFiles.push({
           name: `${baseName}.html`,
