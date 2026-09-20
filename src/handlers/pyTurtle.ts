@@ -1,3 +1,6 @@
+import { DOMParser } from "linkedom/worker";
+import { EllipseCurve } from "three";
+import { SVGLoader } from "three/examples/jsm/loaders/SVGLoader.js";
 import CommonFormats from "src/CommonFormats.ts";
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
 
@@ -6,25 +9,6 @@ const MAX_ELEMENTS = 750;
 const MAX_POINTS_PER_PATH = 150;
 const MAX_TOTAL_POINTS = 20000;
 // note those are good for the browser,and python limits, not your editor/lsp. this might generate a 25,000 line python code :)
-
-function createContainer(svg: string) {
-  // stolen from svg Foreign object convert. we need the browser to render the svg:
-  const dummy = document.createElement("div");
-  dummy.style.all = "initial";
-  dummy.style.visibility = "hidden";
-  dummy.style.position = "fixed";
-  document.body.appendChild(dummy);
-
-  // Add a DOM shadow to the dummy to "sterilize" it.
-  const shadow = dummy.attachShadow({ mode: "closed" });
-
-  // Create a div within the shadow DOM to act as
-  // a container for our HTML payload.
-  const container = document.createElement("div");
-  container.innerHTML = svg;
-  shadow.appendChild(container);
-  return container;
-}
 
 function formatColor(col: string) {
   if (!col || col === "none" || col === "transparent") return null;
@@ -57,7 +41,7 @@ class pyTurtleHandler implements FormatHandler {
   public name: string = "pyTurtle";
   public supportedFormats?: FileFormat[];
   public ready: boolean = false;
-  public offload: boolean = false; // dom stuff. probably possible though
+  public offload: boolean = true;
 
   async init() {
     this.supportedFormats = [
@@ -66,36 +50,11 @@ class pyTurtleHandler implements FormatHandler {
     ];
     this.ready = true;
   }
-  createContainer(svg: string) {
-    // stolen from svg Foreign object convert. we need the browser to render the svg:
-
-    const dummy = document.createElement("div");
-    dummy.style.all = "initial";
-    dummy.style.visibility = "hidden";
-    dummy.style.position = "fixed";
-    document.body.appendChild(dummy);
-
-    // Add a DOM shadow to the dummy to "sterilize" it.
-    const shadow = dummy.attachShadow({ mode: "closed" });
-
-    // Create a div within the shadow DOM to act as
-    // a container for our HTML payload.
-    const container = document.createElement("div");
-    container.innerHTML = svg;
-    shadow.appendChild(container);
-    return container;
-  }
-
   async doConvert(
     inputFiles: FileData[],
     inputFormat: FileFormat,
     outputFormat: FileFormat,
   ): Promise<FileData[]> {
-    if (inputFormat.internal !== "svg")
-      throw new TypeError(`Unsupported input format: ${inputFormat.internal}`);
-    if (outputFormat.internal !== "pyTurtle")
-      throw new TypeError(`Unsupported output format: ${outputFormat.internal}`);
-
     const outputFiles: FileData[] = [];
 
     const encoder = new TextEncoder();
@@ -104,9 +63,7 @@ class pyTurtleHandler implements FormatHandler {
     for (const inputFile of inputFiles) {
       const { name, bytes } = inputFile;
       const svg_text = decoder.decode(bytes);
-      const displayArea = createContainer(svg_text);
-      const svgEl = displayArea.querySelector("svg")!;
-      const python_code = pyTurtleHandler.convert_program(svgEl);
+      const python_code = pyTurtleHandler.convert_program(svg_text);
 
       const outputBytes = encoder.encode(python_code);
       const newName = name.split(".").slice(0, -1).join(".") + ".py";
@@ -115,109 +72,51 @@ class pyTurtleHandler implements FormatHandler {
 
     return outputFiles;
   }
-  static convert_program(svgEl: SVGSVGElement) {
-    let elements: SVGGeometryElement[] = Array.from(
-      svgEl.querySelectorAll("path, circle, rect, ellipse, line, polyline, polygon"),
-    );
-    if (elements.length > MAX_ELEMENTS) {
-      elements = elements.slice(0, MAX_ELEMENTS);
+  static convert_program(svg: string) {
+    // SVGLoader only needs a DOM parser; geometry is calculated without browser APIs.
+    const originalParser = globalThis.DOMParser;
+    globalThis.DOMParser = DOMParser as unknown as typeof globalThis.DOMParser;
+    let paths;
+    try {
+      paths = new SVGLoader().parse(svg).paths;
+    } finally {
+      if (originalParser) globalThis.DOMParser = originalParser;
+      else Reflect.deleteProperty(globalThis, "DOMParser");
     }
-    const pt = svgEl.createSVGPoint(); // this API is deprecated
 
-    let allPoints = [];
-    let shapeData = [];
+    const allPoints = [];
+    const shapeData = [];
+    for (const path of paths.slice(0, MAX_ELEMENTS)) {
+      const style = path.userData!.style;
+      const fill = formatColor(style.fill);
+      const stroke = formatColor(style.stroke);
+      const sw = style.strokeWidth;
 
-    for (const el of elements) {
-      if (allPoints.length >= MAX_TOTAL_POINTS) {
-        break;
-      }
+      for (const subPath of path.subPaths) {
+        if (allPoints.length >= MAX_TOTAL_POINTS) break;
+        if (!subPath.curves.length) continue;
 
-      const style = window.getComputedStyle(el);
-      const fill = formatColor(el.getAttribute("fill") || style.fill);
-      const stroke = formatColor(el.getAttribute("stroke") || style.stroke);
-      const sw = parseFloat(el.getAttribute("stroke-width") || style.strokeWidth || "1");
-      const ctm = el.getScreenCTM();
-      if (!ctm) continue;
-
-      const tagName = el.tagName.toLowerCase();
-
-      if (tagName === "circle" || tagName === "ellipse") {
-        // native circle support
-        const b = el.getBBox();
-        const rx = b.width / 2;
-        const ry = b.height / 2;
-        const cx = b.x + rx;
-        const cy = b.y + ry;
-
-        // Move to the bottom of the circle for Turtle's .circle()
-        pt.x = cx;
-        pt.y = cy + ry;
-        const startTrans = pt.matrixTransform(ctm);
-
-        shapeData.push({
-          type: "circle",
-          x: startTrans.x,
-          y: -startTrans.y,
-          r: rx,
-          fill,
-          stroke,
-          sw,
-        });
-
-        allPoints.push({ x: startTrans.x, y: -startTrans.y });
-      } else {
-        // all other, convert to goto calls
-        let subPaths = [];
-        if (tagName === "path") {
-          const d = el.getAttribute("d");
-          if (d === null) continue;
-          subPaths = d.split(/(?=[Mm])/).filter((s) => s.trim());
+        const curve = subPath.curves[0];
+        if (
+          subPath.curves.length === 1 &&
+          curve instanceof EllipseCurve &&
+          curve.xRadius === curve.yRadius &&
+          Math.abs(curve.aEndAngle - curve.aStartAngle) >= Math.PI * 2
+        ) {
+          const x = curve.aX;
+          const y = -curve.aY - curve.yRadius;
+          shapeData.push({ type: "circle", x, y, r: curve.xRadius, fill, stroke, sw });
+          allPoints.push({ x, y });
         } else {
-          subPaths = [el];
-        }
-
-        for (const seg of subPaths) {
-          if (allPoints.length >= MAX_TOTAL_POINTS) break;
-
-          let pts = [];
-          const tempP =
-            tagName === "path"
-              ? document.createElementNS("http://www.w3.org/2000/svg", "path")
-              : el;
-          if (tagName === "path") tempP.setAttribute("d", seg.toString());
-
-          if (tagName === "path" || tagName === "polyline" || tagName === "polygon") {
-            document.body.appendChild(tempP);
-            const len = tempP.getTotalLength();
-            const step = Math.max(len / MAX_POINTS_PER_PATH, 0.5);
-            for (let i = 0; i <= len; i += step) {
-              const pos = tempP.getPointAtLength(i);
-              pt.x = pos.x;
-              pt.y = pos.y;
-              const trans = pt.matrixTransform(ctm);
-              pts.push({ x: trans.x, y: -trans.y });
-            }
-            if (tagName === "path") document.body.removeChild(tempP);
-          } else {
-            const b = el.getBBox();
-            const corners = [
-              { x: b.x, y: b.y },
-              { x: b.x + b.width, y: b.y },
-              { x: b.x + b.width, y: b.y + b.height },
-              { x: b.x, y: b.y + b.height },
-            ];
-            corners.forEach((c) => {
-              pt.x = c.x;
-              pt.y = c.y;
-              const trans = pt.matrixTransform(ctm);
-              pts.push({ x: trans.x, y: -trans.y });
-            });
-          }
-
-          if (pts.length > 0) {
-            allPoints.push(...pts);
-            shapeData.push({ type: "path", points: pts, fill, stroke, sw });
-          }
+          const divisions = Math.min(
+            MAX_POINTS_PER_PATH,
+            Math.max(1, Math.ceil(subPath.getLength() / 0.5)),
+            MAX_TOTAL_POINTS - allPoints.length - 1,
+          );
+          if (divisions < 1) break;
+          const pts = subPath.getSpacedPoints(divisions).map((p) => ({ x: p.x, y: -p.y }));
+          allPoints.push(...pts);
+          shapeData.push({ type: "path", points: pts, fill, stroke, sw });
         }
       }
     }
@@ -242,7 +141,7 @@ class pyTurtleHandler implements FormatHandler {
       py += `t.penup()\nt.pensize(${shape.sw})\nt.pencolor("${shape.stroke || "black"}")\n`;
       if (shape.fill) py += `t.fillcolor("${shape.fill}")\n`;
 
-      if (shape.type === "circle" && shape.x) {
+      if (shape.type === "circle" && shape.x !== undefined) {
         py += `t.goto(${shape.x.toFixed(2)}, ${shape.y.toFixed(2)})\nt.setheading(0)\n`;
         if (shape.fill) py += "t.begin_fill()\n";
         py += `t.circle(${shape.r.toFixed(2)})\n`;
