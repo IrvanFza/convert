@@ -61,6 +61,10 @@ export default defineConfig({
           dest: "js",
         },
         {
+          src: "node_modules/pdfjs-dist/{standard_fonts,cmaps,wasm}",
+          dest: "js/pdfjs",
+        },
+        {
           src: "node_modules/pdf-parse/dist/pdf-parse/web/pdf.worker.mjs",
           dest: "js",
         },
