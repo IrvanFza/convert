@@ -9,6 +9,10 @@ export default defineConfig({
     exclude: ["@ffmpeg/ffmpeg", "@sqlite.org/sqlite-wasm", "@bokuweb/zstd-wasm", "@yowasp/clang"],
   },
   base: "/convert/",
+  worker: {
+    format: "es",
+    plugins: () => [tsconfigPaths()],
+  },
   plugins: [
     viteStaticCopy({
       targets: [
@@ -55,6 +59,10 @@ export default defineConfig({
         {
           src: "src/handlers/espeakng.js/js/espeakng.worker.data",
           dest: "js",
+        },
+        {
+          src: "node_modules/pdfjs-dist/{standard_fonts,cmaps,wasm}",
+          dest: "js/pdfjs",
         },
         {
           src: "node_modules/pdf-parse/dist/pdf-parse/web/pdf.worker.mjs",

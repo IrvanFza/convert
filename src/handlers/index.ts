@@ -1,10 +1,11 @@
 import type { FormatHandler } from "../FormatHandler.ts";
 
 import canvasToBlobHandler from "./canvasToBlob.ts";
+import svgToBlobHandler from "./svgToBlob.ts";
 import meydaHandler from "./meyda.ts";
 import htmlEmbedHandler from "./htmlEmbed.ts";
 import FFmpegHandler from "./FFmpeg.ts";
-import pdfToImgHandler from "./pdfToImg.ts";
+import pdfjsHandler from "./pdfjs.ts";
 import ImageMagickHandler from "./ImageMagick.ts";
 import curaniHandler from "./curani.ts";
 import bunburrowsHandler from "./bunburrows.ts";
@@ -92,10 +93,11 @@ try { handlers.push(new typstHandler()) } catch (_) { };
 try { handlers.push(new pptxRendererHandler()) } catch (_) { };
 try { handlers.push(new svgTraceHandler()) } catch (_) { };
 try { handlers.push(new canvasToBlobHandler()) } catch (_) { };
+try { handlers.push(new svgToBlobHandler()) } catch (_) { };
 try { handlers.push(new meydaHandler()) } catch (_) { };
 try { handlers.push(new htmlEmbedHandler()) } catch (_) { };
 try { handlers.push(new FFmpegHandler()) } catch (_) { };
-try { handlers.push(new pdfToImgHandler()) } catch (_) { };
+try { handlers.push(new pdfjsHandler()) } catch (_) { };
 try { handlers.push(new ImageMagickHandler()) } catch (_) { };
 try { handlers.push(new curaniHandler()) } catch (_) { };
 try { handlers.push(new bunburrowsHandler()) } catch (_) { };
