@@ -2,10 +2,23 @@ import { ConvertPathNode, type FileFormat, type HandlerDefinition } from "./Form
 import { PriorityQueue } from "./PriorityQueue.ts";
 import * as comlink from "comlink";
 
+export interface CostEntry {
+  reason: string;
+  cost: number;
+}
+
+const sumCosts = (costs: CostEntry[]) => costs.reduce((sum, entry) => sum + entry.cost, 0);
+
+interface CostTrace {
+  previous?: CostTrace;
+  costs: CostEntry[];
+}
+
 interface QueueNode {
   index: number;
   cost: number;
   path: ConvertPathNode[];
+  trace?: CostTrace;
 }
 interface CategoryChangeCost {
   from: string;
@@ -40,6 +53,7 @@ export interface Edge {
   to: { format: FileFormat; index: number };
   handler: string;
   cost: number;
+  costs: CostEntry[];
 }
 
 export class TraversionGraph {
@@ -217,11 +231,13 @@ export class TraversionGraph {
       fromIndices.forEach((from) => {
         toIndices.forEach((to) => {
           if (from.index === to.index) return; // No self-loops
+          const costs = this.costFunction(from, to, strictCategories, handler.name, handlerIndex);
           this.edges.push({
             from: from,
             to: to,
             handler: handler.name,
-            cost: this.costFunction(from, to, strictCategories, handler.name, handlerIndex),
+            cost: sumCosts(costs),
+            costs,
           });
           this.nodes[from.index].edges.push(this.edges.length - 1);
         });
@@ -260,19 +276,20 @@ export class TraversionGraph {
           if (fromIndex === to.index) continue;
           if (existingEdgeKeys.has(`${fromIndex}:${to.index}:${handler.name}`)) continue;
 
-          const cost =
-            this.costFunction(
-              { format: fromNode.format, index: fromIndex },
-              { format: to.format, index: to.index },
-              strictCategories,
-              handler.name,
-              hIndex,
-            ) + ANY_INPUT_COST;
+          const costs = this.costFunction(
+            { format: fromNode.format, index: fromIndex },
+            { format: to.format, index: to.index },
+            strictCategories,
+            handler.name,
+            hIndex,
+          );
+          costs.push({ reason: "Any input surcharge", cost: ANY_INPUT_COST });
           this.edges.push({
             from: { format: fromNode.format, index: fromIndex },
             to: { format: to.format, index: to.index },
             handler: handler.name,
-            cost,
+            cost: sumCosts(costs),
+            costs,
           });
           this.nodes[fromIndex].edges.push(this.edges.length - 1);
         }
@@ -294,7 +311,9 @@ export class TraversionGraph {
     handler: string,
     handlerIndex: number,
   ) {
-    let cost = DEPTH_COST; // Base cost for each conversion step
+    const costs: CostEntry[] = [{ reason: "Base step", cost: DEPTH_COST }];
+    const addCategoryCost = (from: string, to: string, cost: number) =>
+      costs.push({ reason: `Category ${from} → ${to} (${handler})`, cost });
 
     // Calculate category change cost
     const fromCategory = from.format.category || from.format.mime.split("/")[0];
@@ -313,10 +332,9 @@ export class TraversionGraph {
                 c.to === toCat &&
                 (!c.handler || c.handler === handler.toLowerCase()),
             );
-            cost +=
-              costs.length !== 0
-                ? costs.reduce((totalCost, c) => totalCost + c.cost, 0)
-                : DEFAULT_CATEGORY_CHANGE_COST;
+            if (costs.length) {
+              for (const c of costs) addCategoryCost(c.from, c.to, c.cost);
+            } else addCategoryCost(fromCat, toCat, DEFAULT_CATEGORY_CHANGE_COST);
           }
         }
       } else if (!fromCategories.some((c) => toCategories.includes(c))) {
@@ -328,26 +346,46 @@ export class TraversionGraph {
               !this.handlerPairs.get(`${c.from}->${c.to}`)?.has(handler.toLowerCase())) ||
               c.handler === handler.toLowerCase()),
         );
-        if (costs.length === 0) cost += DEFAULT_CATEGORY_CHANGE_COST; // If no specific cost is defined for this category change, use the default cost
-        else cost += Math.min(...costs.map((c) => c.cost)); // If multiple category changes are involved, use the lowest cost defined for those changes. This allows for more nuanced cost calculations when formats belong to multiple categories.
+        if (costs.length === 0)
+          addCategoryCost(
+            fromCategories.join("/"),
+            toCategories.join("/"),
+            DEFAULT_CATEGORY_CHANGE_COST,
+          ); // If no specific cost is defined for this category change, use the default cost
+        else {
+          const selected = costs.reduce((a, b) => (a.cost <= b.cost ? a : b));
+          addCategoryCost(selected.from, selected.to, selected.cost);
+        } // If multiple category changes are involved, use the lowest cost defined for those changes. This allows for more nuanced cost calculations when formats belong to multiple categories.
       }
     } else if (fromCategory || toCategory) {
       // If one format has a category and the other doesn't, consider it a category change
       // Should theoretically never be encountered, unless the MIME type is misspecified
-      cost += DEFAULT_CATEGORY_CHANGE_COST;
+      addCategoryCost(String(fromCategory), String(toCategory), DEFAULT_CATEGORY_CHANGE_COST);
     }
 
     // Add cost based on handler priority
-    cost += HANDLER_PRIORITY_COST * handlerIndex;
+    costs.push({
+      reason: `Handler priority (${handlerIndex})`,
+      cost: HANDLER_PRIORITY_COST * handlerIndex,
+    });
 
     // Add cost based on format priority
-    cost +=
-      FORMAT_PRIORITY_COST * (this.formatPriorityByHandler.get(handler)?.get(to.format.mime) ?? 0);
+    const formatPriority = this.formatPriorityByHandler.get(handler)?.get(to.format.mime) ?? 0;
+    costs.push({
+      reason: `Format priority (${formatPriority})`,
+      cost: FORMAT_PRIORITY_COST * formatPriority,
+    });
 
     // Add cost multiplier for lossy conversions
-    if (!to.format.lossless) cost *= LOSSY_COST_MULTIPLIER;
+    if (!to.format.lossless) {
+      const subtotal = sumCosts(costs);
+      costs.push({
+        reason: `Lossy ×${LOSSY_COST_MULTIPLIER}`,
+        cost: subtotal * LOSSY_COST_MULTIPLIER - subtotal,
+      });
+    }
 
-    return cost;
+    return costs;
   }
 
   /**
@@ -370,6 +408,7 @@ export class TraversionGraph {
         to: { format: { ...edge.to.format }, index: edge.to.index },
         handler: edge.handler,
         cost: edge.cost,
+        costs: edge.costs.map((c) => ({ ...c })),
       })),
       categoryChangeCosts: this.categoryChangeCosts.map((c) => ({
         from: c.from,
@@ -435,6 +474,7 @@ export class TraversionGraph {
     from: ConvertPathNode,
     to: ConvertPathNode,
     simpleMode: boolean,
+    debug?: (costs: (CostEntry & { step: number })[], total: number) => void,
   ): AsyncGenerator<ConvertPathNode[]> {
     // A*: base edge costs estimate the remaining costs
     const fromIdentifier = from.format.mime + `(${from.format.format})`;
@@ -459,13 +499,21 @@ export class TraversionGraph {
       // Get the node with the lowest cost
       let current = queue.poll()!;
       // A failed conversion can invalidate paths already in the queue.
-      if (!Number.isFinite(this.calculateAdaptiveCost(current.path))) continue;
+      if (!Number.isFinite(sumCosts(this.calculateAdaptiveCosts(current.path)))) continue;
       if (current.index === toIndex) {
         // Return the path of handlers and formats to get from the input format to the output format
         const logString = `${iterations} with cost ${current.cost.toFixed(3)}: ${current.path.map((p) => p.handler.name + "(" + p.format.mime + ")").join(" → ")}`;
         const foundPathLast = current.path.at(-1);
         if (simpleMode || !to.handler || to.handler.name === foundPathLast?.handler.name) {
           console.log(`Found path at iteration ${logString}`);
+          if (debug) {
+            const steps: CostEntry[][] = [];
+            for (let trace = current.trace; trace; trace = trace.previous) steps.push(trace.costs);
+            const costs = steps
+              .toReversed()
+              .flatMap((entries, i) => entries.map((entry) => ({ step: i + 1, ...entry })));
+            debug(costs, current.cost);
+          }
           this.dispatchEvent("found", current.path);
           yield current.path;
           pathsFound++;
@@ -491,9 +539,13 @@ export class TraversionGraph {
         if (!handler) return; // If the handler for this edge is not found, skip it
 
         let path = current.path.concat({ handler: handler, format: edge.to.format });
+        const adaptiveCosts = this.calculateAdaptiveCosts(path);
         queue.add({
           index: edge.to.index,
-          cost: current.cost + edge.cost + this.calculateAdaptiveCost(path),
+          cost: current.cost + edge.cost + sumCosts(adaptiveCosts),
+          trace: debug
+            ? { previous: current.trace, costs: [...edge.costs, ...adaptiveCosts] }
+            : undefined,
           path: path,
         });
       });
@@ -512,7 +564,7 @@ export class TraversionGraph {
     return comlink.proxy(this.searchPath(from, to, simpleMode));
   }
 
-  private calculateAdaptiveCost(path: ConvertPathNode[]): number {
+  private calculateAdaptiveCosts(path: ConvertPathNode[]): CostEntry[] {
     for (const deadEnd of this.temporaryDeadEnds) {
       let isDeadEnd = true;
       for (let i = 0; i < deadEnd.length; i++) {
@@ -525,9 +577,9 @@ export class TraversionGraph {
         isDeadEnd = false;
         break;
       }
-      if (isDeadEnd) return Infinity;
+      if (isDeadEnd) return [{ reason: "Dead end", cost: Infinity }];
     }
-    let cost = 0;
+    const costs: CostEntry[] = [];
     const categoriesInPath = path.map((p) => {
       const category = p.format.category || p.format.mime.split("/")[0];
       return Array.isArray(category) ? category : [category];
@@ -541,7 +593,7 @@ export class TraversionGraph {
           pathPtr--;
 
           if (categoryPtr < 0) {
-            cost += c.cost;
+            costs.push({ reason: `Adaptive ${c.categories.join(" → ")}`, cost: c.cost });
             break;
           }
           if (pathPtr < 0) break;
@@ -554,7 +606,7 @@ export class TraversionGraph {
         } else break;
       }
     });
-    return cost;
+    return costs;
   }
 }
 

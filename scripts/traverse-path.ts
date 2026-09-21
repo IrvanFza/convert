@@ -5,9 +5,12 @@ import { join } from "node:path";
 
 const CACHE_FILE = join(process.cwd(), "dist/cache.json");
 
-if (Bun.argv.length < 5) {
+const args = Bun.argv.slice(2).filter((arg) => arg !== "--breakdown");
+const breakdown = Bun.argv.includes("--breakdown");
+
+if (args.length < 3) {
   console.log(
-    "Usage: bun run scripts/traverse-path.ts <max-paths> <ext-from>[#<mime-from>] <ext-to>[#<mime-to>]",
+    "Usage: bun run scripts/traverse-path.ts <max-paths> <ext-from>[#<mime-from>] <ext-to>[#<mime-to>] [--breakdown]",
   );
   console.log("ex. bun run scripts/traverse-path.ts 10 mp3 ogg#audio/ogg");
   exit(1);
@@ -51,11 +54,31 @@ function findNode(text: string, filterKey: keyof FileFormat) {
   return found;
 }
 
-const from = findNode(Bun.argv[3], "from");
-const to = findNode(Bun.argv[4], "to");
+console.log();
+const from = findNode(args[1], "from");
+const to = findNode(args[2], "to");
+console.log();
 
-const search = traversionGraph.searchPath(from, to, true);
-for (let i = 0; i < Number(Bun.argv[2]); i++) {
+const search = traversionGraph.searchPath(
+  from,
+  to,
+  true,
+  breakdown
+    ? (costs, total) => {
+        const steps = new Map<number, string[]>();
+        for (const { step, reason, cost } of costs) {
+          if (!steps.has(step)) steps.set(step, []);
+          steps.get(step)!.push(`${reason}: ${Number(cost.toFixed(6))}`);
+        }
+        for (const [step, entries] of steps) {
+          console.log(`Step ${step}: ${entries.join(", ")}`);
+        }
+        console.log(`Total cost: ${total}`);
+        console.log();
+      }
+    : undefined,
+);
+for (let i = 0; i < Number(args[0]); i++) {
   const { done, value: path } = await search.next();
   if (done) break;
 
