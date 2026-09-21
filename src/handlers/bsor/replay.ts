@@ -195,6 +195,7 @@ export class Replay {
     const bufferF32 = new Float32Array(buffer);
     const bufferU8 = new Uint8Array(buffer);
 
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     function raise(msg: string): never {
       throw new BSORError(msg);
     }
