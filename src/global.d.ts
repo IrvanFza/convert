@@ -4,7 +4,7 @@ import type { Remote } from "comlink";
 
 declare global {
   interface Window {
-    handlerCache: HandlerDefinition[];
+    handlerDefs: HandlerDefinition[];
     traversionGraph: Remote<TraversionGraph>;
     printSupportedFormatCache: () => string;
     showPopup: (html: string) => void;

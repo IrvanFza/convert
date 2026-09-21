@@ -1,12 +1,11 @@
 import {
   type FileFormat,
   type FileData,
-  type FormatHandler,
   type ConvertPathNode,
-  stripHandler,
   stripPathNode,
+  type HandlerDefinition,
 } from "./FormatHandler.js";
-import handlers from "./handlers/index.js";
+import { initDefinitions } from "./handlers/index.js";
 import * as comlink from "comlink";
 import type { TraversionGraph } from "./TraversionGraph.js";
 import TraversionGraphWorker from "./TraversionGraph.js?worker";
@@ -19,7 +18,7 @@ import { ProgressStore } from "./ui/ProgressStore.js";
 
 type FileRecord = Record<`${string}-${string}`, File>;
 
-export type ConversionOptionsMap = Map<FileFormat, FormatHandler>;
+export type ConversionOptionsMap = Map<FileFormat, HandlerDefinition>;
 export type ConversionOption = ConversionOptionsMap extends Map<infer K, infer V> ? [K, V] : never;
 
 export const ConversionOptions: ConversionOptionsMap = new Map();
@@ -31,11 +30,7 @@ export function goToUploadHome(): void {
   SelectedFiles.value = {};
 }
 
-export const ConversionsFromAnyInput: ConvertPathNode[] = handlers
-  .filter((h) => h.supportAnyInput && h.supportedFormats)
-  .flatMap((h) => h.supportedFormats!.filter((f) => f.to).map((f) => ({ handler: h, format: f })));
-
-window.handlerCache = [];
+window.handlerDefs = [];
 
 const RemoteConverter = comlink.wrap<typeof Converter>(new ConverterWorker());
 const RemoteTraversionGraph = comlink.wrap<typeof TraversionGraph>(new TraversionGraphWorker());
@@ -45,32 +40,15 @@ const converterMain = new Converter("main_thread");
 window.traversionGraph = await new RemoteTraversionGraph();
 
 window.printSupportedFormatCache = () => {
-  return JSON.stringify(window.handlerCache, null, 2);
+  return JSON.stringify(window.handlerDefs, null, 2);
 };
 
 async function buildOptionList() {
   ConversionOptions.clear();
 
-  for (const handler of handlers) {
-    if (!window.handlerCache.some((h) => h.name === handler.name)) {
-      console.warn(`Cache miss for handler "${handler.name}"`);
+  await initDefinitions(window.handlerDefs);
 
-      try {
-        await handler.init();
-      } catch (error) {
-        console.error(`Error while initializing ${handler.name}:`, error);
-        continue;
-      }
-
-      if (handler.supportedFormats) {
-        window.handlerCache.push(stripHandler(handler));
-        console.info(`Updated supported format cache for "${handler.name}"`);
-      }
-    }
-
-    const cachedHandler = window.handlerCache.find((h) => h.name === handler.name);
-    Object.assign(handler, cachedHandler);
-
+  for (const handler of window.handlerDefs) {
     if (!handler.supportedFormats) {
       console.warn(`Handler "${handler.name}" doesn't support any formats`);
       continue;
@@ -82,10 +60,10 @@ async function buildOptionList() {
     }
   }
 
-  await window.traversionGraph.init(window.handlerCache);
+  await window.traversionGraph.init(window.handlerDefs);
 
-  converterMain.init(window.handlerCache);
-  await converterWorker.init(window.handlerCache);
+  converterMain.init(window.handlerDefs);
+  await converterWorker.init(window.handlerDefs);
 
   LoadingToolsText.value = undefined;
 }
@@ -231,7 +209,7 @@ window.tryConvertByTraversing = async function (
 async function initSupportedFormats() {
   try {
     try {
-      window.handlerCache = await fetch("cache.json").then((r) => r.json());
+      window.handlerDefs = await fetch("cache.json").then((r) => r.json());
     } catch {
       console.warn(
         "Missing supported format precache.\n\n" +

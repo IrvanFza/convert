@@ -1,191 +1,142 @@
-import type { FormatHandler } from "../FormatHandler.ts";
+import { stripHandler, type FormatHandler, type HandlerDefinition } from "../FormatHandler.ts";
 
-import canvasToBlobHandler from "./canvasToBlob.ts";
-import svgToBlobHandler from "./svgToBlob.ts";
-import meydaHandler from "./meyda.ts";
-import htmlEmbedHandler from "./htmlEmbed.ts";
-import mediabunnyHandler from "./mediabunny.ts";
-import FFmpegHandler from "./FFmpeg.ts";
-import pdfjsHandler from "./pdfjs.ts";
-import ImageMagickHandler from "./ImageMagick.ts";
-import curaniHandler from "./curani.ts";
-import bunburrowsHandler from "./bunburrows.ts";
-import rgbaHandler from "./rgba.ts";
-import svgTraceHandler from "./svgTrace.ts";
-import { comicsZipPackerHandler, comicsZipUnpackerHandler, comicsTarUnpackerHandler } from "./comics.ts";
-import { renameZipHandler, renameRarHandler, renameTarHandler, rename7zHandler, renameTxtHandler, renameJsonHandler } from "./rename.ts";
-import envelopeHandler from "./envelope.ts";
-import pptxRendererHandler from "./pptxRenderer.ts";
-import pandocHandler from "./pandoc.ts";
-import htmlToSvgHandler from "./htmlToSvg.ts";
-import qoiFuHandler from "./qoiFu.ts";
-import sppdHandler from "./sppd.ts";
-import threejsHandler from "./threejs.ts";
-import sqliteHandler from "./sqlite.ts";
-import vtfHandler from "./vtf.ts";
-import mcMapHandler from "./mcMap.ts";
-import sevenZipHandler from "./sevenZip.ts";
-import configHandler from "./config.ts";
-import alsHandler from "./als.ts";
-import qoaFuHandler from "./qoaFu.ts";
-import pyTurtleHandler from "./pyTurtle.ts";
-import { fromJsonHandler, toJsonHandler } from "./json.ts";
-import nbtHandler from "./nbt.ts";
-import peToZipHandler from "./peToZip.ts";
-import flpToJsonHandler from "./flpToJson.ts";
-import floHandler from "./flo.ts";
-import cgbiToPngHandler from "./cgbiToPng.ts";
-import batToExeHandler from "./batToExe.ts";
-import textEncodingHandler from "./textEncoding.ts";
-import jsonToCHandler from "./jsonToC.ts";
-import turbowarpHandler from "./turbowarp.ts";
-import libopenmptHandler from "./libopenmpt.ts";
-import { midiCodecHandler, midiSynthHandler } from "./midi.ts";
-import { lzhHandler, lzh2Handler } from "./lzh.ts";
-import { txtToInfiniteCraftHandler, infiniteCraftToJsonHandler } from "./infiniteCraft.ts";
-import wadHandler from "./wad.ts";
-import espeakngHandler from "./espeakng.js"
-import exeToBatHandler from "./exeToBat.ts";
-import bsorHandler from "./bsor.ts";
-import fontHandler from "./font.ts";
-import icnsHandler from "./icns.ts";
-import mcSchematicHandler from "./mcSchematic.ts";
-import bsonHandler from "./bson.ts";
-import asepriteHandler from "./aseprite.ts";
-import harHandler from "./har.ts";
-import n64romHandler from "./n64rom.ts";
-import vexFlowHandler from "./vexFlow.ts";
-import toonHandler from "./toon.ts";
-import rpgmvpHandler from "./rpgmvp.ts";
-import otaHandler from "./ota.ts";
-import terrariaWldHandler from "./terrariaWld.ts";
-import { opusMagnumMainHandler, opusMagnumTTMHandler, opusMagnumITMHandler } from "./opusMagnum.ts";
-import aperturePictureHandler from "./aperturePicture.ts";
-import xcfHandler from "./xcf.ts";
-import pdfparseHandler from "./pdfparse.ts";
-import minecraftLangHandler from "./minecraftLang.ts";
-import celariaMapHandler from "./celariaMap.ts";
-import cybergrindHandler from "./cybergrind.ts";
-import textToSourceHandler from "./textToSource.ts";
-import wabtHandler from "./wabt.ts";
-import chessjsHandler from "./chessjs.ts";
-import fenToJsonHandler from "./fenToJson.ts";
-import piskelHandler from "./piskel.ts";
-import xcursorHandler from "./xcursor.ts";
-import shToElfHandler from "./shToElf.ts";
-import cssHandler from "./css.ts";
-import textToPdfHandler from "./textToPdf.ts";
-import typstHandler from "./typst.ts";
-import epubHandler from "./epub.ts";
-import bbmodelHandler from "./bbmodel.ts";
-import kraHandler from "./kra.ts";
-import krzHandler from "./krz.ts";
-import brarchiveHandler from "./brarchive.ts";
-import wasiRunnerHandler from "./wasiRunner.ts";
-import clangWasiHandler from "./clangWasi.ts";
-import mcModpackHandler from "./mcModpack.ts";
-import azw3Handler from "./azw3.ts";
-import wavebreakHandler from "./wavebreak.ts";
+const HANDLER_NAMES = [
+  "epub",
+  "pandoc",
+  "typst",
+  "pptxRenderer",
+  "svgTrace",
+  "canvasToBlob",
+  "svgToBlob",
+  "meyda",
+  "htmlEmbed",
+  "mediabunny",
+  "pdfjs",
+  "ImageMagick",
+  "curani",
+  "bunburrows",
+  "rgba",
+  // todo
+  // "comics",
+  // "comics",
+  // "comics",
+  "FFmpeg",
+  // "rename",
+  // "rename",
+  // "rename",
+  // "rename",
+  // "rename",
+  // "rename",
+  "envelope",
+  "htmlToSvg",
+  "qoiFu",
+  "sppd",
+  "threejs",
+  "sqlite",
+  "vtf",
+  "mcMap",
+  "sevenZip",
+  "config",
+  "als",
+  "qoaFu",
+  "pyTurtle",
+  // "json",
+  // "json",
+  "nbt",
+  "peToZip",
+  "flpToJson",
+  "flo",
+  "cgbiToPng",
+  "batToExe",
+  "turbowarp",
+  "textEncoding",
+  "jsonToC",
+  "libopenmpt",
+  // "midi",
+  // "midi",
+  // "lzh",
+  // "lzh",
+  "wad",
+  // "infiniteCraft",
+  // "infiniteCraft",
+  "espeakng",
+  "exeToBat",
+  "bsor",
+  "font",
+  "icns",
+  "mcSchematic",
+  "bson",
+  "aseprite",
+  "har",
+  "n64rom",
+  "vexFlow",
+  "toon",
+  "rpgmvp",
+  "ota",
+  "terrariaWld",
+  // "opusMagnum",
+  // "opusMagnum",
+  // "opusMagnum",
+  "aperturePicture",
+  "xcf",
+  "pdfparse",
+  "minecraftLang",
+  "celariaMap",
+  "cybergrind",
+  "textToSource",
+  "wabt",
+  "chessjs",
+  "fenToJson",
+  "piskel",
+  "xcursor",
+  "shToElf",
+  "textToPdf",
+  "css",
+  "bbmodel",
+  "kra",
+  "krz",
+  "brarchive",
+  "wasiRunner",
+  "clangWasi",
+  "mcModpack",
+  "azw3",
+  "wavebreak"
+] as const;
 
-const handlers: FormatHandler[] = [];
-try { handlers.push(new epubHandler()) } catch (_) { };
-try { handlers.push(new pandocHandler()) } catch (_) { };
-try { handlers.push(new typstHandler()) } catch (_) { };
-try { handlers.push(new pptxRendererHandler()) } catch (_) { };
-try { handlers.push(new svgTraceHandler()) } catch (_) { };
-try { handlers.push(new canvasToBlobHandler()) } catch (_) { };
-try { handlers.push(new svgToBlobHandler()) } catch (_) { };
-try { handlers.push(new meydaHandler()) } catch (_) { };
-try { handlers.push(new htmlEmbedHandler()) } catch (_) { };
-try { handlers.push(new mediabunnyHandler()) } catch (_) { };
-try { handlers.push(new pdfjsHandler()) } catch (_) { };
-try { handlers.push(new ImageMagickHandler()) } catch (_) { };
-try { handlers.push(new curaniHandler()) } catch (_) { };
-try { handlers.push(new bunburrowsHandler()) } catch (_) { };
-try { handlers.push(new rgbaHandler()) } catch (_) { };
-try { handlers.push(new comicsZipPackerHandler()) } catch (_) { };
-try { handlers.push(new comicsZipUnpackerHandler()) } catch (_) { };
-try { handlers.push(new comicsTarUnpackerHandler()) } catch (_) { };
-try { handlers.push(new FFmpegHandler()) } catch (_) { };
-try { handlers.push(renameZipHandler) } catch (_) { };
-try { handlers.push(renameTarHandler) } catch (_) { };
-try { handlers.push(renameRarHandler) } catch (_) { };
-try { handlers.push(rename7zHandler) } catch (_) { };
-try { handlers.push(renameTxtHandler) } catch (_) { };
-try { handlers.push(renameJsonHandler) } catch (_) { };
-try { handlers.push(new envelopeHandler()) } catch (_) { };
-try { handlers.push(new htmlToSvgHandler()) } catch (_) { };
-try { handlers.push(new qoiFuHandler()) } catch (_) { };
-try { handlers.push(new sppdHandler()) } catch (_) { };
-try { handlers.push(new threejsHandler()) } catch (_) { };
-try { handlers.push(new sqliteHandler()) } catch (_) { };
-try { handlers.push(new vtfHandler()) } catch (_) { };
-try { handlers.push(new mcMapHandler()) } catch (_) { };
-try { handlers.push(new sevenZipHandler()) } catch (_) { };
-try { handlers.push(new configHandler()) } catch (_) { };
-try { handlers.push(new alsHandler()) } catch (_) { };
-try { handlers.push(new qoaFuHandler()) } catch (_) { };
-try { handlers.push(new pyTurtleHandler()) } catch (_) { };
-try { handlers.push(new fromJsonHandler()) } catch (_) { };
-try { handlers.push(new toJsonHandler()) } catch (_) { };
-try { handlers.push(new nbtHandler()) } catch (_) { };
-try { handlers.push(new peToZipHandler()) } catch (_) { };
-try { handlers.push(new flpToJsonHandler()) } catch (_) { };
-try { handlers.push(new floHandler()) } catch (_) { };
-try { handlers.push(new cgbiToPngHandler()) } catch (_) { };
-try { handlers.push(new batToExeHandler()) } catch (_) { };
-try { handlers.push(new turbowarpHandler()) } catch (_) { };
-try { handlers.push(new textEncodingHandler()) } catch (_) { };
-try { handlers.push(new jsonToCHandler()) } catch (_) { };
-try { handlers.push(new libopenmptHandler()) } catch (_) { };
-try { handlers.push(new midiCodecHandler()) } catch (_) { };
-try { handlers.push(new midiSynthHandler()) } catch (_) { };
-try { handlers.push(new lzhHandler()) } catch (_) { };
-try { handlers.push(new lzh2Handler()) } catch (_) { };
-try { handlers.push(new wadHandler()) } catch (_) { };
-try { handlers.push(new txtToInfiniteCraftHandler()) } catch (_) { };
-try { handlers.push(new infiniteCraftToJsonHandler()) } catch (_) { };
-try { handlers.push(new espeakngHandler()) } catch (_) { };
-try { handlers.push(new exeToBatHandler()) } catch (_) { };
-try { handlers.push(new bsorHandler()) } catch (_) { };
-try { handlers.push(new fontHandler()) } catch (_) { };
-try { handlers.push(new icnsHandler()) } catch (_) { };
-try { handlers.push(new mcSchematicHandler()) } catch (_) { };
-try { handlers.push(new bsonHandler()) } catch (_) { };
-try { handlers.push(new asepriteHandler()) } catch (_) { };
-try { handlers.push(new harHandler()) } catch (_) { };
-try { handlers.push(new n64romHandler()) } catch (_) { };
-try { handlers.push(new vexFlowHandler()) } catch (_) { };
-try { handlers.push(new toonHandler()) } catch (_) { };
-try { handlers.push(new rpgmvpHandler()) } catch (_) { };
-try { handlers.push(new otaHandler()) } catch (_) { };
-try { handlers.push(new terrariaWldHandler()) } catch (_) { };
-try { handlers.push(new opusMagnumMainHandler()) } catch (_) { };
-try { handlers.push(new opusMagnumTTMHandler()) } catch (_) { };
-try { handlers.push(new opusMagnumITMHandler()) } catch (_) { };
-try { handlers.push(new aperturePictureHandler()) } catch (_) { };
-try { handlers.push(new xcfHandler()) } catch (_) { };
-try { handlers.push(new pdfparseHandler()) } catch (_) { };
-try { handlers.push(new minecraftLangHandler()) } catch (_) { };
-try { handlers.push(new celariaMapHandler()) } catch (_) { };
-try { handlers.push(new cybergrindHandler()) } catch (_) { };
-try { handlers.push(new textToSourceHandler()) } catch (_) { };
-try { handlers.push(new wabtHandler()) } catch (_) { };
-try { handlers.push(new chessjsHandler()) } catch (_) { };
-try { handlers.push(new fenToJsonHandler()) } catch (_) { };
-try { handlers.push(new piskelHandler()) } catch (_) { };
-try { handlers.push(new xcursorHandler()) } catch (_) { };
-try { handlers.push(new shToElfHandler()) } catch (_) { };
-try { handlers.push(new textToPdfHandler()) } catch (_) { };
-try { handlers.push(new cssHandler()) } catch (_) { };
-try { handlers.push(new bbmodelHandler()) } catch (_) { };
-try { handlers.push(new kraHandler()) } catch (_) { };
-try { handlers.push(new krzHandler()) } catch (_) { };
-try { handlers.push(new brarchiveHandler()) } catch (_) { };
-try { handlers.push(new wasiRunnerHandler()) } catch (_) { };
-try { handlers.push(new clangWasiHandler()) } catch (_) { };
-try { handlers.push(new mcModpackHandler()) } catch (_) { };
-try { handlers.push(new azw3Handler()) } catch (_) { };
-try { handlers.push(new wavebreakHandler()) } catch (_) { };
+export type HandlerName = (typeof HANDLER_NAMES)[number];
 
-export default handlers;
+type HandlerModule = {
+  default: new () => FormatHandler;
+};
+
+const modules = import.meta.glob<HandlerModule>("./*.ts");
+
+const singletons = new Map<HandlerName, FormatHandler>();
+
+export async function getHandler(name: HandlerName) {
+  let handler = singletons.get(name);
+  if (handler) return handler;
+  const module = modules[`./${name}.ts`];
+  const HandlerClass = (await module()).default;
+  handler = new HandlerClass();
+  singletons.set(name, handler);
+  return handler;
+}
+
+export async function initDefinitions(cache: HandlerDefinition[]) {
+  for (const handlerName of HANDLER_NAMES) {
+    if (cache.some(h => h.name === handlerName)) continue;
+
+    console.warn(`Cache miss for handler "${handlerName}"`);
+
+    try {
+      const handler = await getHandler(handlerName);
+      await handler.init();
+      cache.push(stripHandler(handler));
+      console.log(`Updated handler cache for handler "${handlerName}".`);
+    } catch (error) {
+      console.error(`Error while initializing ${handlerName}:`, error);
+      continue;
+    }
+  }
+}
