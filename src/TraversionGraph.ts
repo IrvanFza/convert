@@ -41,6 +41,7 @@ const FORMAT_PRIORITY_COST: number = 0.05; // Cost multiplier for format priorit
 const ANY_INPUT_COST: number = 2; // Extra cost for edges created via supportAnyInput. Discourages generic "pack" conversions so the algorithm prefers more specific conversion paths (e.g. rename-then-convert over wrapping a file as-is).
 
 const LOG_FREQUENCY = 1000;
+const MAX_QUEUED_PATHS = 15_000_000;
 
 export interface Node {
   identifier: string;
@@ -540,6 +541,11 @@ export class TraversionGraph {
 
         let path = current.path.concat({ handler: handler, format: edge.to.format });
         const adaptiveCosts = this.calculateAdaptiveCosts(path);
+        if (!Number.isFinite(sumCosts(adaptiveCosts))) return;
+        if (queue.size() >= MAX_QUEUED_PATHS) {
+          queue.clear();
+          throw new Error("Conversion path search limit exceeded. Try a different output format.");
+        }
         queue.add({
           index: edge.to.index,
           cost: current.cost + edge.cost + sumCosts(adaptiveCosts),
