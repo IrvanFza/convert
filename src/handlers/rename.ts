@@ -1,16 +1,17 @@
 import CommonFormats, { Category } from "src/CommonFormats.ts";
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
 
-// base class for handling renames
-function renameHandler(name: string, formats: FileFormat[]): FormatHandler {
-  return {
-    name: name,
-    ready: true,
-    supportedFormats: formats,
-    offload: true,
+function createRenameHandler(name: string, formats: FileFormat[]) {
+  return class {
+    public name = name;
+    public ready = true;
+    public supportedFormats = formats;
+    public offload = true;
+
     async init() {
       this.ready = true;
-    },
+    }
+
     async doConvert(
       inputFiles: FileData[],
       inputFormat: FileFormat,
@@ -20,11 +21,11 @@ function renameHandler(name: string, formats: FileFormat[]): FormatHandler {
         ...file,
         name: file.name.split(".").slice(0, -1).join(".") + "." + outputFormat.extension,
       }));
-    },
+    }
   };
 }
 /// handler for renaming various aliased zip files
-export const renameZipHandler = renameHandler("renamezip", [
+export const renameZipHandler = createRenameHandler("renameZip", [
   CommonFormats.ZIP.builder("zip").allowTo(),
   CommonFormats.DOCX.builder("docx").allowFrom(),
   CommonFormats.XLSX.builder("xlsx").allowFrom(),
@@ -140,14 +141,14 @@ export const renameZipHandler = renameHandler("renamezip", [
   },
 ]);
 /// handler for renaming text-based formats
-export const renameTxtHandler = renameHandler("renametxt", [
+export const renameTxtHandler = createRenameHandler("renameTxt", [
   CommonFormats.TEXT.builder("text").allowTo(),
   CommonFormats.JSON.builder("json").allowFrom(),
   CommonFormats.XML.builder("xml").allowFrom(),
   CommonFormats.YML.builder("yaml").allowFrom(),
 ]);
 /// handler for renaming json-based formats
-export const renameJsonHandler = renameHandler("renamejson", [
+export const renameJsonHandler = createRenameHandler("renameJson", [
   CommonFormats.JSON.builder("json").allowTo(),
   {
     name: "HTTP Archive",
@@ -172,7 +173,7 @@ export const renameJsonHandler = renameHandler("renamejson", [
   },
 ]);
 /// handler for renaming tar-based formats
-export const renameTarHandler = renameHandler("renametar", [
+export const renameTarHandler = createRenameHandler("renameTar", [
   CommonFormats.TAR.builder("tar").allowTo(),
   {
     name: "Comic Book Archive (TAR)",
@@ -187,7 +188,7 @@ export const renameTarHandler = renameHandler("renametar", [
   },
 ]);
 /// handler for renaming rar-based formats
-export const renameRarHandler = renameHandler("renamerar", [
+export const renameRarHandler = createRenameHandler("renameRar", [
   CommonFormats.RAR.builder("rar").allowTo(),
   {
     name: "Comic Book Archive (RAR)",
@@ -202,7 +203,7 @@ export const renameRarHandler = renameHandler("renamerar", [
   },
 ]);
 /// handler for renaming 7z-based formats
-export const rename7zHandler = renameHandler("rename7z", [
+export const rename7zHandler = createRenameHandler("rename7z", [
   CommonFormats.SZ.builder("7z").allowTo(),
   {
     name: "Comic Book Archive (7Z)",
