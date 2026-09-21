@@ -4,7 +4,7 @@ import "./index.css";
 interface LogoProps {
   showName?: boolean;
   size?: number;
-  onClick?: () => void;
+  onClick?: (event: MouseEvent) => void;
   disabled?: boolean;
 }
 

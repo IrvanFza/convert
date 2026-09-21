@@ -22,7 +22,7 @@ button.logo {
   }
 
   &:hover:not(:disabled) .logo-icon {
-    transform: rotate(-180deg);
+    transform: rotate(-45deg);
   }
 
   &:disabled {
