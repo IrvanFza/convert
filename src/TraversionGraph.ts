@@ -475,6 +475,7 @@ export class TraversionGraph {
     from: ConvertPathNode,
     to: ConvertPathNode,
     simpleMode: boolean,
+    isCancelled?: () => boolean | Promise<boolean>,
     debug?: (costs: (CostEntry & { step: number })[], total: number) => void,
   ): AsyncGenerator<ConvertPathNode[]> {
     // A*: base edge costs estimate the remaining costs
@@ -496,6 +497,8 @@ export class TraversionGraph {
     let iterations = 0;
     let pathsFound = 0;
     while (queue.size() > 0) {
+      // Awaiting a proxied callback lets the UI cancel even before a path is found.
+      if (iterations % LOG_FREQUENCY === 0 && (await isCancelled?.())) return;
       iterations++;
       // Get the node with the lowest cost
       let current = queue.poll()!;
@@ -566,8 +569,13 @@ export class TraversionGraph {
     );
   }
 
-  public searchPathProxied(from: ConvertPathNode, to: ConvertPathNode, simpleMode: boolean) {
-    return comlink.proxy(this.searchPath(from, to, simpleMode));
+  public searchPathProxied(
+    from: ConvertPathNode,
+    to: ConvertPathNode,
+    simpleMode: boolean,
+    isCancelled?: () => boolean | Promise<boolean>,
+  ) {
+    return comlink.proxy(this.searchPath(from, to, simpleMode, isCancelled));
   }
 
   private calculateAdaptiveCosts(path: ConvertPathNode[]): CostEntry[] {

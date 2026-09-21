@@ -188,11 +188,13 @@ window.tryConvertByTraversing = async function (
   abort?: AbortSignal,
 ) {
   deadEndAttempts = [];
+  abort ??= ProgressStore.controller.signal;
   await window.traversionGraph.clearDeadEndPaths();
   const paths = await window.traversionGraph.searchPathProxied(
     stripPathNode(from),
     stripPathNode(to),
     Mode.value === ModeEnum.Simple,
+    comlink.proxy(() => abort.aborted),
   );
   while (true) {
     const { value: path, done } = await paths.next();
