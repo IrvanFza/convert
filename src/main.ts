@@ -160,8 +160,11 @@ async function attemptConvertPath(
 
       abort.throwIfAborted();
 
-      console.log(path.map((c) => c.format.format));
-      console.error(handlerDef.name, `${path[i].format.format} → ${path[i + 1].format.format}`, e);
+      ProgressStore.log(
+        `Conversion path failed: ${pathString} (${handlerDef.name}: ${path[i].format.format} → ${path[i + 1].format.format}): ${e instanceof Error ? e.message : String(e)}`,
+        "error",
+        handlerDef.name,
+      );
 
       const deadEndPath = path.slice(0, i + 2);
       deadEndAttempts.push(deadEndPath);
