@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, copyFileSync, writeFileSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import ts from "typescript";
 import { extraExtensionToIcon } from "./extra-language-extensions";
@@ -8,9 +8,7 @@ const REPO_URL = "https://github.com/material-extensions/vscode-material-icon-th
 const CACHE_DIR = join(process.cwd(), ".cache/material-icon-theme");
 const ICONS_SRC = join(CACHE_DIR, "icons");
 const FILE_ICONS_TS = join(CACHE_DIR, "src/core/icons/fileIcons.ts");
-const OUT_PUBLIC = join(process.cwd(), "public/material-file-icons");
-const OUT_ICONS = join(OUT_PUBLIC, "icons");
-const OUT_MAP = join(OUT_PUBLIC, "extension-map.json");
+const OUT_BUNDLE = join(process.cwd(), "public/icons.json");
 
 const FILE_SVG_PATH =
   "m8.668 6h3.6641l-3.6641-3.668v3.668m-4.668-4.668h5.332l4 4v8c0 0.73828-0.59375 1.3359-1.332 1.3359h-8c-0.73828 0-1.332-0.59766-1.332-1.3359v-10.664c0-0.74219 0.59375-1.3359 1.332-1.3359m3.332 1.3359h-3.332v10.664h8v-6h-4.668z";
@@ -115,11 +113,6 @@ function resolveSourceIconPath(iconName: string, cloneBase: string | undefined):
   return null;
 }
 
-function writeDefaultFileSvg(): void {
-  const svg = `<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="${FILE_SVG_PATH}" fill="${DEFAULT_FILE_COLOR}" /></svg>`;
-  writeFileSync(join(OUT_ICONS, "file.svg"), svg, "utf-8");
-}
-
 function main(): void {
   ensureRepo();
   if (!existsSync(FILE_ICONS_TS)) {
@@ -144,22 +137,20 @@ function main(): void {
   const logicalNames = new Set(extToLogical.values());
   logicalNames.add("file");
 
-  mkdirSync(OUT_ICONS, { recursive: true });
-
   const documentFallback = join(ICONS_SRC, "document.svg");
 
+  const icons: Record<string, string> = {};
   function materializeIcon(logical: string): void {
     if (logical === "file") {
-      writeDefaultFileSvg();
+      icons.file = `<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="${FILE_SVG_PATH}" fill="${DEFAULT_FILE_COLOR}" /></svg>`;
       return;
     }
     const entry = entries.find((x) => x.name === logical);
     const src = resolveSourceIconPath(logical, entry?.cloneBase);
-    const dest = join(OUT_ICONS, `${logical}.svg`);
     if (src) {
-      copyFileSync(src, dest);
+      icons[logical] = readFileSync(src, "utf-8");
     } else if (existsSync(documentFallback)) {
-      copyFileSync(documentFallback, dest);
+      icons[logical] = readFileSync(documentFallback, "utf-8");
     }
   }
 
@@ -172,10 +163,10 @@ function main(): void {
     extensionMap[ext] = logical;
   }
 
-  writeFileSync(OUT_MAP, JSON.stringify(extensionMap), "utf-8");
+  writeFileSync(OUT_BUNDLE, JSON.stringify({ extensions: extensionMap, icons }), "utf-8");
 
   console.log(
-    `[material-icons] wrote ${Object.keys(extensionMap).length} extension mappings and ${logicalNames.size} icon files under public/material-file-icons`,
+    `[material-icons] wrote ${Object.keys(extensionMap).length} extension mappings and ${logicalNames.size} icons to ${OUT_BUNDLE}`,
   );
 }
 
