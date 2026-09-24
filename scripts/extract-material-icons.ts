@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import ts from "typescript";
 import { extraExtensionToIcon } from "./extra-language-extensions";
 
@@ -163,6 +163,7 @@ function main(): void {
     extensionMap[ext] = logical;
   }
 
+  mkdirSync(dirname(OUT_BUNDLE), { recursive: true });
   writeFileSync(OUT_BUNDLE, JSON.stringify({ extensions: extensionMap, icons }), "utf-8");
 
   console.log(
