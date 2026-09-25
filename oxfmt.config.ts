@@ -18,6 +18,7 @@ export const ignorePatterns = [
   "src/handlers/sppd/**",
   "src/handlers/terraria-wld-parser/**",
   "src/handlers/turbowarp/**",
+  "src/handlers/typst-assets/**",
 ];
 
 export default defineConfig({ ignorePatterns });
