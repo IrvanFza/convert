@@ -342,8 +342,16 @@ class typstHandler implements FormatHandler {
   private $typst?: TypstSnippet;
 
   async init() {
-    const { $typst: typst } = await import("@myriaddreamin/typst.ts/dist/esm/contrib/snippet.mjs");
+    const { $typst: typst, TypstSnippet } =
+      await import("@myriaddreamin/typst.ts/dist/esm/contrib/snippet.mjs");
 
+    typst.use(
+      TypstSnippet.preloadFontAssets({
+        assets: ["text"],
+        assetUrlPrefix: new URL(`${import.meta.env.BASE_URL}wasm/typst/`, globalThis.location.href)
+          .href,
+      }),
+    );
     typst.setCompilerInitOptions({
       getModule: () => `${import.meta.env.BASE_URL}wasm/typst_ts_web_compiler_bg.wasm`,
     });

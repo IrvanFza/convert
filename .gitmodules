@@ -28,3 +28,6 @@
 [submodule "src/handlers/turbowarp/unpackager"]
 	path = src/handlers/turbowarp/unpackager
 	url = https://github.com/TurboWarp/unpackager.git
+[submodule "src/handlers/typst-assets"]
+	path = src/handlers/typst-assets
+	url = https://github.com/typst/typst-assets

@@ -4,6 +4,8 @@ import { DOMParser as WorkerDOMParser, Document } from "linkedom/worker";
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
 import CommonFormats, { Category } from "src/CommonFormats.ts";
 import { buildMidi, addNote } from "./midi/midifilelib.js";
+import bravuraUrl from "@vexflow-fonts/bravura/bravura.woff2?url";
+import academicoUrl from "@vexflow-fonts/academico/academico.woff2?url";
 
 const DOMParser = WorkerDOMParser as unknown as typeof globalThis.DOMParser;
 
@@ -75,7 +77,8 @@ class vexFlowHandler implements FormatHandler {
     // Load VexFlow fonts (required for VexFlow 5)
     if (!vexFlowHandler.fontsLoaded) {
       try {
-        await VexFlow.loadFonts("Bravura", "Academico");
+        await VexFlow.Font.load("Bravura", bravuraUrl);
+        await VexFlow.Font.load("Academico", academicoUrl);
         vexFlowHandler.fontsLoaded = true;
         console.log("VexFlow fonts loaded successfully");
       } catch (e) {
@@ -396,7 +399,8 @@ class vexFlowHandler implements FormatHandler {
         // Handle HTML output
         // Ensure fonts are loaded before rendering
         if (!vexFlowHandler.fontsLoaded) {
-          await VexFlow.loadFonts("Bravura", "Academico");
+          await VexFlow.Font.load("Bravura", bravuraUrl);
+          await VexFlow.Font.load("Academico", academicoUrl);
           vexFlowHandler.fontsLoaded = true;
         }
         VexFlow.setFonts("Bravura", "Academico");

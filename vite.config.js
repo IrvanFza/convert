@@ -85,6 +85,10 @@ export default defineConfig({
           src: "node_modules/@myriaddreamin/typst-ts-renderer/pkg/typst_ts_renderer_bg.wasm",
           dest: "wasm",
         },
+        {
+          src: "src/handlers/typst-assets/files/fonts/*",
+          dest: "wasm/typst",
+        },
       ],
     }),
     preact({
